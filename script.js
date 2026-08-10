@@ -1335,14 +1335,41 @@ function handleCellClick(r, c) {
         return;
     }
 
-    // Chạm vào 1 ô ĐÃ MỞ ở xa (không kề playerPos) -> mèo tự tìm đường và chạy 1 mạch
-    // qua các ô đã biết, đỡ phải bấm từng bước khi bàn cờ lớn (7x7 -> 9x9). Vùng CHƯA
-    // mở vẫn phải khám phá từng ô một như cũ — không cho "nhảy cóc" vào chỗ chưa biết.
-    if (tutorialActive || !grid[r][c].revealed) return;
-    const path = findPathThroughRevealed(playerPos.r, playerPos.c, r, c);
-    if (!path || !path.length) return;
+    if (tutorialActive) return;
+
+    if (grid[r][c].revealed) {
+        // Chạm vào 1 ô ĐÃ MỞ ở xa -> mèo tự tìm đường và chạy 1 mạch qua các ô đã
+        // biết, đỡ phải bấm từng bước khi bàn cờ lớn.
+        const path = findPathThroughRevealed(playerPos.r, playerPos.c, r, c);
+        if (!path || !path.length) return;
+        isWalking = true;
+        walkPath(path, 0, levelGeneration);
+        return;
+    }
+
+    // Chạm vào 1 ô CHƯA MỞ ở xa -> mèo tự đi tới 1 ô KỀ nó (chỉ qua vùng đã biết,
+    // không "nhảy cóc" xuyên vùng ẩn) rồi bước nốt bước cuối để mở luôn — gộp 2
+    // thao tác "đi lại gần" + "bấm mở" thành 1 lần chạm cho đỡ phải làm 2 bước.
+    if (grid[r][c].flagged) return; // đang cắm cờ thì để handleMoveInput tự báo khi bước tới
+    const approachPath = findPathToAdjacentRevealed(playerPos.r, playerPos.c, r, c);
+    if (!approachPath) return;
     isWalking = true;
-    walkPath(path, 0, levelGeneration);
+    walkPath(approachPath.concat([{ r, c }]), 0, levelGeneration);
+}
+
+// Tìm đường ngắn nhất (chỉ qua ô đã revealed) từ (fromR,fromC) tới 1 trong 4 ô
+// KỀ (toR,toC) — dùng để "đi tới sát" 1 ô chưa mở trước khi bước bước cuối vào nó.
+function findPathToAdjacentRevealed(fromR, fromC, toR, toC) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let best = null;
+    for (const [dr, dc] of dirs) {
+        const nr = toR + dr, nc = toC + dc;
+        if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
+        if (!grid[nr][nc].revealed) continue;
+        const path = findPathThroughRevealed(fromR, fromC, nr, nc);
+        if (path && (!best || path.length < best.length)) best = path;
+    }
+    return best;
 }
 
 let isWalking = false;
