@@ -53,6 +53,33 @@ function updateSoundToggleUI() {
     });
 }
 
+// =============================================================================
+// DARK MODE — chỉ đổi nền trang (xem body.dark-mode trong style.css), mọi thứ
+// khác (bàn cờ, ô, nút, modal...) giữ nguyên, không đụng vào.
+// =============================================================================
+const DARK_MODE_KEY = 'catYarnDarkMode';
+let darkModeEnabled = false;
+
+function loadDarkMode() {
+    try {
+        darkModeEnabled = localStorage.getItem(DARK_MODE_KEY) === '1';
+    } catch (e) { darkModeEnabled = false; }
+    applyDarkMode();
+}
+
+function toggleDarkMode() {
+    darkModeEnabled = !darkModeEnabled;
+    try { localStorage.setItem(DARK_MODE_KEY, darkModeEnabled ? '1' : '0'); } catch (e) { /* bỏ qua nếu bị chặn */ }
+    applyDarkMode();
+}
+
+function applyDarkMode() {
+    document.body.classList.toggle('dark-mode', darkModeEnabled);
+    document.querySelectorAll('.settings-toggle').forEach(btn => {
+        btn.classList.toggle('dark-active', darkModeEnabled);
+    });
+}
+
 function showSettings() {
     updateSoundToggleUI();
     document.getElementById('settings-modal').classList.add('show');
@@ -125,6 +152,18 @@ function playSound(type) {
         gain.gain.linearRampToValueAtTime(0.01, now + 0.06);
         osc.start(now);
         osc.stop(now + 0.06);
+    }
+    else if (type === 'color') {
+        // Tiếng "lấp lánh" ngắn khi mèo tìm thấy đốm màu giấu trong màn — vút lên
+        // 3 nấc cho cảm giác vui, khác hẳn tiếng "tích" cắm cờ.
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.setValueAtTime(700, now + 0.08);
+        osc.frequency.setValueAtTime(950, now + 0.16);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.26);
+        osc.start(now);
+        osc.stop(now + 0.26);
     }
     else if (type === 'pop') {
         // Tiếng "bụp" nhỏ, nhẹ — dùng lặp lại cho từng ô nổ lúc ăn mừng chiến thắng,
@@ -410,6 +449,8 @@ let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắ
 let pendingBubbleLoad = false; // true khi đang bung TOÀN BỘ Ô lúc mới vào màn (kể cả ô ẩn)
 let levelGeneration = 0; // tăng mỗi lần loadLevel() chạy — dùng để huỷ hiệu ứng/popup thắng dở dang nếu lỡ Replay giữa lúc đang ăn mừng
 let usedReviveThisLevel = false; // mỗi lượt chơi 1 màn chỉ được hồi sinh 1 lần (xu hoặc xem QC)
+let foundColor = false; // đã tìm thấy đốm màu giấu trong màn chưa — chưa có thì không được ăn cá
+let levelHasColor = false; // màn này có cơ chế giấu màu không (gán trong loadLevel())
 
 // =============================================================================
 // XU (economy) — nhận xu mỗi khi qua màn, lưu lại qua localStorage.
@@ -715,12 +756,29 @@ function getNextPlayableLevel() {
     return idx;
 }
 
+// Đã chơi qua hết toàn bộ level hiện có (kể cả level cuối) chưa.
+function areAllLevelsCompleted() {
+    return LEVELS.length > 0 && completedLevels.has(LEVELS.length - 1);
+}
+
 function renderHomeScreen() {
+    // Ô số level giữ nguyên như cũ (luôn hiện số level, kể cả khi đã chơi hết) —
+    // chỉ nút Chơi đổi trạng thái khi hết level.
     document.getElementById('home-level-number').textContent = getNextPlayableLevel() + 1;
+
+    const playBtn = document.querySelector('.home-play-btn');
+    if (areAllLevelsCompleted()) {
+        playBtn.textContent = '🔜 Sắp Ra Mắt';
+        playBtn.disabled = true;
+    } else {
+        playBtn.textContent = '▶ Chơi';
+        playBtn.disabled = false;
+    }
     updateCoinDisplay();
 }
 
 function playCurrentLevel() {
+    if (areAllLevelsCompleted()) return; // chưa có thêm level mới, chờ bản cập nhật sau
     startLevel(getNextPlayableLevel());
 }
 
@@ -741,6 +799,7 @@ function startLevel(idx) {
 
 function goHome() {
     endGuidedTutorial();
+    hideResultModal(); // popup thắng/thua là lớp phủ riêng, không tự ẩn theo màn hình
     showScreen('home');
     renderHomeScreen();
 }
@@ -763,7 +822,7 @@ function loadLevel(idx) {
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
     isWalking = false; // đề phòng lỡ đang tự chạy dở dang từ màn trước, không để input bị kẹt khoá
     clearHint(); // vòng gợi ý (nếu có) thuộc về ván trước, không còn ý nghĩa ở màn mới
-    if (catEl) catEl.classList.remove('expr-happy', 'expr-dizzy');
+    if (catEl) catEl.classList.remove('expr-happy', 'expr-dizzy', 'cat-colored');
     currentLevelIdx = idx;
     const rows = LEVELS[currentLevelIdx];
     GRID_ROWS = rows.length;
@@ -778,10 +837,14 @@ function loadLevel(idx) {
             if (ch === 'S') type = 'S';
             else if (ch === 'E') type = 'E';
             else if (ch === '#') type = 'B';
-            grid[r].push({ type, count: 0, revealed: false, flagged: false });
+            // 'C' = ô giấu màu (cơ chế "tìm màu cho mèo") — vẫn là ô thường (N), chỉ
+            // thêm cờ hasColor, không đổi cách tính số bẫy lân cận.
+            const hasColor = (ch === 'C');
+            grid[r].push({ type, count: 0, revealed: false, flagged: false, hasColor });
             if (type === 'S') playerPos = { r, c };
         }
     }
+    foundColor = false;
 
     // Tính số bẫy lân cận (8 hướng) cho từng ô, kiểu Minesweeper
     for (let r = 0; r < GRID_ROWS; r++) {
@@ -815,7 +878,12 @@ function loadLevel(idx) {
     ctx.clearRect(0, 0, canvas.logicalWidth, canvas.logicalHeight);
 
     document.getElementById('level-title').innerText = `Level ${currentLevelIdx + 1}`;
-    updateStatus('Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
+    // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
+    // đỡ để người chơi tự dò tới tận ô cá mới biết cần tìm gì.
+    levelHasColor = grid.some(row => row.some(cell => cell.hasColor));
+    updateStatus(levelHasColor
+        ? '🎨 Cá đang chờ đúng màu đó! Tìm đốm màu giống màu cá rồi hẵng tới ăn nhé!'
+        : 'Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
     hideResultModal();
 
     // Hiệu ứng "bubble": tất cả các ô bung ra lần lượt theo thứ tự khi vừa vào màn, cho
@@ -831,6 +899,7 @@ function loadLevel(idx) {
     // Mỗi level có thể khác kích thước lưới (5x5 -> 9x9) -> luôn co lại cho vừa màn
     // hình ngay khi vừa dựng xong bàn cờ mới, không chỉ lúc mở màn Game lần đầu.
     fitBoardToSpace();
+    maybeShowColorTutorial();
 }
 
 function showResultModal({ type, icon, title, message, actions, coinReward }) {
@@ -932,6 +1001,27 @@ function maybeShowTutorialOnFirstVisit() {
 
 document.getElementById('tutorial-modal').addEventListener('click', (e) => {
     if (e.target.id === 'tutorial-modal') closeTutorialModal();
+});
+
+// Popup giới thiệu cơ chế "tìm màu cho mèo" — chỉ hiện đúng 1 lần, đúng lúc vào
+// màn ĐẦU TIÊN có cơ chế này (không phải lần đầu mở app như tutorial chính).
+const COLOR_TUTORIAL_SEEN_KEY = 'catYarnColorTutorialSeen';
+
+function maybeShowColorTutorial() {
+    if (!levelHasColor) return;
+    let hasSeen = false;
+    try { hasSeen = localStorage.getItem(COLOR_TUTORIAL_SEEN_KEY) === '1'; } catch (e) { /* bỏ qua */ }
+    if (hasSeen) return;
+    document.getElementById('color-tutorial-modal').classList.add('show');
+}
+
+function hideColorTutorial() {
+    document.getElementById('color-tutorial-modal').classList.remove('show');
+    try { localStorage.setItem(COLOR_TUTORIAL_SEEN_KEY, '1'); } catch (e) { /* localStorage có thể bị chặn, bỏ qua */ }
+}
+
+document.getElementById('color-tutorial-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'color-tutorial-modal') hideColorTutorial();
 });
 
 // =============================================================================
@@ -1140,14 +1230,10 @@ function render(instant) {
                     </svg>`;
             } else if (cell.type === 'E') {
                 el.classList.add('revealed-safe');
-                contentHTML = `
-                    <div class="fish-plate">
-                        <svg viewBox="0 0 50 30" style="width:30px; height:20px;">
-                            <path d="M 5 15 C 15 5, 35 5, 40 15 C 35 25, 15 25, 5 15 Z" fill="#ff5964" stroke="#4a3022" stroke-width="3"/>
-                            <polygon points="5,15 0,5 0,25" fill="#ff5964" stroke="#4a3022" stroke-width="3" stroke-linejoin="round"/>
-                            <circle cx="32" cy="12" r="2" fill="#4a3022"/>
-                        </svg>
-                    </div>`;
+                // Màn có cơ chế tìm màu -> ô cá LUÔN có sẵn màu cần tìm ngay từ đầu màn
+                // (không đợi tìm thấy mới đổi) — để người chơi biết ngay cần tìm màu gì.
+                if (levelHasColor) el.classList.add('color-cell-tinted');
+                contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
             } else {
                 el.classList.add('revealed-safe');
                 if (cell.type === 'N' && cell.count > 0) {
@@ -1161,6 +1247,16 @@ function render(instant) {
             inner.className = 'cell-inner';
             inner.innerHTML = contentHTML;
             el.appendChild(inner);
+
+            // Đốm màu giấu trong ô (nếu có) -> hiện chấm tròn nhỏ ở góc khi ô đã mở,
+            // ĐÚNG màu ô cá, để người chơi liên tưởng ngay "màu này khớp màu cá cần".
+            // Gắn trực tiếp vào .cell (không phải .cell-inner) để không dính lỗi
+            // stacking-context khi .cell-inner có transform riêng.
+            if (cell.revealed && cell.hasColor) {
+                const colorBadge = document.createElement('span');
+                colorBadge.className = 'color-badge';
+                el.appendChild(colorBadge);
+            }
 
             const revealIdx = revealOrder.get(r + ',' + c);
             if (revealIdx !== undefined) {
@@ -1512,6 +1608,11 @@ function handleMoveInput(targetR, targetC) {
         return;
     }
 
+    if (targetCell.type === 'E' && levelHasColor && !foundColor) {
+        updateStatus('🎨 Mèo cần tìm màu trước khi ăn cá!', '#ff5964');
+        return;
+    }
+
     if (tutorialActive) {
         const step = TUTORIAL_STEPS[tutorialStep];
         if (step.action === 'click') {
@@ -1552,6 +1653,43 @@ function handleMoveInput(targetR, targetC) {
     }
 }
 
+// Cơ chế "tìm màu cho mèo": 1 ô an toàn trong màn giấu sẵn màu (cell.hasColor),
+// hiện ra ngay khi ô đó được mở (dù mở trực tiếp hay bị loang trúng) — không cần
+// đoán mò thêm. Chưa tìm thấy màu thì chưa được bước vào ô cá (xem handleMoveInput).
+function checkColorPickup(r, c, cell) {
+    if (!cell.hasColor || foundColor) return;
+    foundColor = true;
+    playSound('color');
+    updateStatus('🎨 Mèo tìm thấy màu rồi! Giờ ăn được cá!', '#8ac926');
+    if (catEl) catEl.classList.add('cat-colored');
+    const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+    if (cellEl) {
+        const rect = cellEl.getBoundingClientRect();
+        addColorSparkleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }
+}
+
+function addColorSparkleParticles(x, y) {
+    for (let i = 0; i < 14; i++) {
+        const p = new Particle(x, y, 'confetti');
+        p.x = x;
+        p.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 6 + 3;
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed - 2;
+        p.gravity = 0.2;
+        p.friction = 0.96;
+        p.size = Math.random() * 6 + 5;
+        particles.push(p);
+    }
+    if (!fxAnimating) {
+        fxAnimating = true;
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        animateFX();
+    }
+}
+
 function revealAndMove(r, c) {
     playerPos = { r, c };
     const cell = grid[r][c];
@@ -1559,6 +1697,7 @@ function revealAndMove(r, c) {
     cell.revealed = true;
     cell.flagged = false;
     if (wasHidden) pendingReveals.push({ r, c });
+    checkColorPickup(r, c, cell);
 
     if (hintTargetCell && hintTargetCell.r === r && hintTargetCell.c === c) clearHint();
 
@@ -1775,6 +1914,7 @@ function floodReveal(startR, startC) {
                 n.revealed = true;
                 n.flagged = false;
                 pendingReveals.push({ r: nr, c: nc });
+                checkColorPickup(nr, nc, n);
                 if (n.type === 'N' && n.count === 0) queue.push([nr, nc]);
             }
         }
@@ -1880,6 +2020,11 @@ function cheatGoToLevel() {
     const select = document.getElementById('cheat-level-select');
     const idx = parseInt(select.value, 10);
     if (!LEVELS.length || isNaN(idx) || idx < 0 || idx >= LEVELS.length) return;
+    // Cheat nhảy tới level nào thì coi như đã qua hết các level TRƯỚC đó (không tính
+    // idx là đã qua) — để quay về Home thấy đúng level vừa nhảy tới là level hiện tại,
+    // không bị đẩy lùi về level cũ theo tiến trình thật.
+    for (let i = 0; i < idx; i++) completedLevels.add(i);
+    saveProgress();
     hideCheatMenu();
     showScreen('game');
     loadLevel(idx);
@@ -1954,6 +2099,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
 }
 
 (async () => {
+    loadDarkMode(); // áp trước tiên, tránh nháy nền sáng rồi mới tối lại
     showScreen('loading');
     await loadLevels();
     loadCoins();

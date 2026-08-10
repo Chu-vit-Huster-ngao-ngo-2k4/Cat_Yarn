@@ -112,6 +112,10 @@
           <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
           <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
         </button>
+        <button class="settings-toggle" id="settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối">
+          <span class="dark-icon dark-icon-on">☀️</span>
+          <span class="dark-icon dark-icon-off">🌙</span>
+        </button>
       </div>
       <div class="settings-row">
         <button class="btn-piffle btn-pink" onclick="replayFromSettings()">🔄 Chơi Lại</button>
@@ -130,6 +134,10 @@
         <button class="settings-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
           <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
           <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
+        </button>
+        <button class="settings-toggle" id="home-settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối">
+          <span class="dark-icon dark-icon-on">☀️</span>
+          <span class="dark-icon dark-icon-off">🌙</span>
         </button>
       </div>
       <div class="settings-row settings-row-soon">
@@ -210,6 +218,32 @@
       </div>
       <div class="modal-actions">
         <button class="btn-piffle btn-green" onclick="closeTutorialModal()">Bắt đầu tập chơi! 👆</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup giới thiệu cơ chế "tìm màu cho mèo" — chỉ hiện 1 lần duy nhất, đúng lúc
+       vào MÀN ĐẦU TIÊN có cơ chế này (xem maybeShowColorTutorial() trong script.js). -->
+  <div id="color-tutorial-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-icon">🎨</div>
+      <h2 class="modal-title" style="color:#4a3022;">Bí Mật Màu Sắc!</h2>
+      <div class="tutorial-tips">
+        <div class="tip-row">
+          <span class="tip-icon">🎨</span>
+          <span class="tip-text">Từ màn này, có 1 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">🐟</span>
+          <span class="tip-text">Con cá đã có sẵn màu cần tìm — nhìn màu cá là biết cần tìm màu gì.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">🔒</span>
+          <span class="tip-text">Chưa tìm thấy đốm màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="hideColorTutorial()">Đã hiểu! 🐱</button>
       </div>
     </div>
   </div>
