@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Thêm viewport chuẩn chống zoom vào <head> -->
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Cat's Yarn - Né Bẫy Tìm Cá 🐱💣</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <canvas id="fx-canvas"></canvas>
+
+  <div id="win-flash"></div>
+
+  <div id="app">
+
+    <!-- ===== MÀN HOME ===== -->
+    <div id="screen-home" class="screen">
+      <div class="screen-top">
+        <div class="header">
+          <h1>CAT'S YARN</h1>
+        </div>
+        <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+      </div>
+
+      <div class="screen-middle">
+        <div class="home-level-display" onclick="playCurrentLevel()" title="Bấm để chơi">
+          <div class="home-level-label">Level</div>
+          <div class="home-level-number" id="home-level-number">1</div>
+        </div>
+        <button class="btn-piffle btn-green home-play-btn" onclick="playCurrentLevel()">▶ Chơi</button>
+      </div>
+
+      <div class="screen-bottom">
+        <button class="btn-piffle btn-blue" onclick="showTutorial()">📖 Cách Chơi</button>
+      </div>
+    </div>
+
+    <!-- ===== MÀN CHƠI ===== -->
+    <div id="screen-game" class="screen" style="display:none;">
+      <div class="screen-top">
+        <div class="game-topbar">
+          <div class="topbar-side topbar-side-left">
+            <button class="icon-btn" onclick="goHome()" title="Về trang chủ">←</button>
+          </div>
+          <div class="level-badge" id="level-title">Level 1</div>
+          <div class="topbar-side topbar-side-right topbar-icons">
+            <button class="icon-btn" onclick="showTutorial()" title="Cách chơi">❓</button>
+            <button class="icon-btn" onclick="showSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+          </div>
+        </div>
+        <div id="status" class="status-banner">Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾</div>
+      </div>
+
+      <div class="screen-middle" id="board-area">
+        <div id="board-outer">
+          <div id="game-board">
+            <div id="cells-layer"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen-bottom">
+        <div class="controls">
+          <button class="btn-piffle btn-yellow" onclick="undo()">↩️ Lại<span class="booster-badge" id="undo-badge">3</span></button>
+          <button class="btn-piffle btn-blue" id="hint-btn" onclick="useHint()">💡 Gợi Ý<span class="booster-badge" id="hint-badge">3</span></button>
+          <button class="btn-piffle btn-green" id="next-btn" style="display:none;" onclick="nextLevel()">⏩ Màn Tiếp</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Khoảng trống đáy màn hình, chừa sẵn cho banner ads sau này -->
+  <div id="ad-placeholder">Quảng cáo</div>
+
+  <div id="result-modal" class="modal-overlay">
+    <div class="modal-card" id="modal-card">
+      <div class="modal-icon" id="modal-icon"></div>
+      <h2 class="modal-title" id="modal-title"></h2>
+      <p class="modal-message" id="modal-message"></p>
+      <div class="modal-coin-reward" id="modal-coin-reward">🪙 +<span id="modal-coin-amount">0</span></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="hideSettings()" title="Đóng">×</button>
+      <div class="modal-icon"><img class="modal-icon-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></div>
+      <h2 class="modal-title" style="color:#4a3022;">Cài Đặt</h2>
+      <div class="settings-row">
+        <button class="settings-toggle" id="settings-sound-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
+          <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
+          <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
+        </button>
+      </div>
+      <div class="settings-row">
+        <button class="btn-piffle btn-pink" onclick="replayFromSettings()">🔄 Chơi Lại</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="booster-shop-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="hideBoosterShop()" title="Đóng">×</button>
+      <div class="modal-icon" id="booster-shop-icon">💡</div>
+      <h2 class="modal-title" id="booster-shop-title" style="color:#4a3022;">Hết Rồi!</h2>
+      <p class="modal-message" id="booster-shop-message">Mua thêm để dùng tiếp nhé!</p>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)">🪙 Mua (100)</button>
+        <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)">📺 Xem QC</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tutorial-modal" class="modal-overlay">
+    <div class="modal-card tutorial-card">
+      <div class="modal-icon">📖</div>
+      <h2 class="modal-title" style="color:#2a9d8f;">Cách Chơi</h2>
+      <div class="tutorial-tips">
+        <div class="tip-row">
+          <span class="tip-icon">🐾</span>
+          <span class="tip-text">Chạm ô kề bên (hoặc vuốt / bấm phím mũi tên) để mèo bước tới.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">🔢</span>
+          <span class="tip-text">Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">💣</span>
+          <span class="tip-text">Bước trúng ô có bẫy là thua ngay, phải bấm Replay chơi lại từ đầu.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">🚩</span>
+          <span class="tip-text">Giữ ngón tay (hoặc chuột phải) trên 1 ô nghi có bẫy để cắm cờ, tránh bấm nhầm.</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-icon">🐟</span>
+          <span class="tip-text">Dẫn mèo tới đĩa cá để qua màn!</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="closeTutorialModal()">Bắt đầu tập chơi! 👆</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tutorial-spotlight"></div>
+
+  <div id="tutorial-hand">👇</div>
+
+  <div id="hint-ring"></div>
+
+  <div id="tutorial-bar" class="tutorial-bar">
+    <span class="tutorial-bar-text"></span>
+    <button id="tutorial-continue-btn" onclick="advanceTutorial()">Tiếp tục ▶</button>
+  </div>
+
+  <script src="ads.js"></script>
+  <script src="script.js"></script>
+</body>
+
+</html>

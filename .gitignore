@@ -1,0 +1,26 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Android build outputs (regenerate với gradlew assembleDebug)
+android/build/
+android/app/build/
+android/.gradle/
+android/captures/
+android/local.properties
+android/.idea/
+android/app/release/
+
+# Assets native do Capacitor tự copy từ www/ mỗi lần chạy `npx cap sync android`
+# -> không cần track trùng lặp, chỉ cần www/ (nguồn) là đủ.
+android/app/src/main/assets/public/
+
+# Ký ứng dụng release — TUYỆT ĐỐI không commit file keystore thật
+*.keystore
+*.jks
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.iml
+.idea/

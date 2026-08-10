@@ -1,0 +1,1175 @@
+    :root {
+      --cacao: #4a3022;
+      --bg-cream: #fff9eb;
+      --board-bg: #f7e7ce;
+      --board-shadow: #d8c29d;
+      --cell-bg: #fff3dd;
+      --cell-shadow: #e2cca8;
+      --btn-yellow: #ffca3a;
+      --btn-yellow-shadow: #d89f10;
+      --btn-pink: #ff5964;
+      --btn-pink-shadow: #c92a35;
+      --btn-green: #8ac926;
+      --btn-green-shadow: #6a9e1b;
+      --btn-blue: #1982c4;
+      --btn-blue-shadow: #125e8f;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      height: 100%;
+      overscroll-behavior: none;
+    }
+
+    body {
+      font-family: 'Fredoka', cursive, sans-serif;
+      background-color: var(--bg-cream);
+      background-image: radial-gradient(#e9d6b5 15%, transparent 16%);
+      background-size: 24px 24px;
+      color: var(--cacao);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      position: relative;
+    }
+
+    /* Thêm vào CSS */
+    body {
+      touch-action: manipulation;
+      /* Tắt double-tap zoom */
+      -webkit-touch-callout: none;
+      /* Tắt popup đè giữ ảnh trên iOS */
+    }
+
+    #fx-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    /* Loé sáng trắng toàn màn hình đúng khoảnh khắc chiến thắng, cho cảm giác "bùm!" */
+    #win-flash {
+      position: fixed;
+      inset: 0;
+      background: #ffffff;
+      z-index: 190;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    #win-flash.flash {
+      animation: win-flash-anim 0.45s ease-out;
+    }
+
+    @keyframes win-flash-anim {
+      0% { opacity: 0.9; }
+      100% { opacity: 0; }
+    }
+
+    /* Rung nhẹ toàn màn game đúng lúc thắng, thêm chút "bùm" cho màn hình.
+       Áp lên #app (không phải #game-board) vì #game-board đã có transform:scale()
+       riêng do JS set để co giãn bàn cờ — animate transform ở đó sẽ đè mất phần
+       scale, làm bàn cờ nhảy về kích thước gốc trong lúc rung. */
+    @keyframes screen-shake-anim {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-6px, 3px); }
+      40% { transform: translate(6px, -3px); }
+      60% { transform: translate(-4px, -2px); }
+      80% { transform: translate(4px, 2px); }
+    }
+
+    #app.screen-shake {
+      animation: screen-shake-anim 0.4s ease-in-out;
+    }
+
+    /* #app là khung ứng dụng thật, cao đúng bằng màn hình (trừ khoảng ads ở đáy),
+       UI trên (screen-top) và dưới (screen-bottom) giữ nguyên kích thước — chỉ
+       vùng bàn cờ ở giữa (screen-middle) mới co giãn theo khoảng trống còn lại. */
+    #app {
+      width: 100%;
+      max-width: 480px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Khoảng trống cố định ở đáy màn hình thật, chừa sẵn cho banner ads sau này */
+    #ad-placeholder {
+      width: 100%;
+      max-width: 480px;
+      flex-shrink: 0;
+      height: calc(50px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--cacao);
+      opacity: 0.35;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-top: 2px dashed var(--board-shadow);
+    }
+
+    .header h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      color: #ff5964;
+      margin: 0 0 10px 0;
+      text-shadow:
+        3px 3px 0px var(--cacao),
+        -1px -1px 0 var(--cacao),
+        1px -1px 0 var(--cacao),
+        -1px 1px 0 var(--cacao),
+        1px 1px 0 var(--cacao);
+      letter-spacing: 1px;
+    }
+
+    /* Màn Home / màn Chơi — chỉ 1 trong 2 hiện tại 1 thời điểm (JS toggle display),
+       chia 3 vùng: trên (điều hướng/điểm số) - giữa (co giãn) - dưới (nút bấm). */
+    .screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      padding: 0 12px;
+      box-sizing: border-box;
+    }
+
+    .screen-top {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    }
+
+    .screen-middle {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .screen-bottom {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding-bottom: 16px;
+    }
+
+    /* Thanh trên khi đang chơi: mũi tên lùi về Home - tên level - nhóm icon (❓/🔊) */
+    .game-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(380px, 100%);
+      margin: 0 0 12px;
+      z-index: 10;
+    }
+
+    /* 2 bên trái/phải luôn chiếm không gian BẰNG NHAU (flex:1) dù số lượng nút khác
+       nhau, để số level ở giữa luôn nằm đúng tâm ngang màn hình, không bị lệch. */
+    .topbar-side {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar-side-left {
+      justify-content: flex-start;
+    }
+
+    .topbar-side-right {
+      justify-content: flex-end;
+    }
+
+    .topbar-icons {
+      gap: 8px;
+    }
+
+    .level-badge {
+      background-color: var(--btn-yellow);
+      border: 3px solid var(--cacao);
+      box-shadow: 0 4px 0 var(--btn-yellow-shadow);
+      border-radius: 16px;
+      padding: 6px 16px;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    /* Huy hiệu số xu hiện có — nhún nhẹ mỗi khi cộng thêm xu */
+    .coin-badge {
+      background-color: #fff3c4;
+      border: 3px solid var(--cacao);
+      box-shadow: 0 4px 0 #e0a940;
+      border-radius: 16px;
+      padding: 4px 14px;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+
+    @keyframes coin-badge-pop {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.18); }
+      100% { transform: scale(1); }
+    }
+
+    .coin-badge.pop {
+      animation: coin-badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .icon-btn {
+      background-color: #ffffff;
+      border: 3px solid var(--cacao);
+      box-shadow: 0 4px 0 var(--cacao);
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 var(--cacao);
+    }
+
+    /* Khối hiển thị số level to giữa màn Home, thay cho lưới chọn màn */
+    .home-level-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 180px;
+      height: 180px;
+      background-color: var(--btn-yellow);
+      border: 5px solid var(--cacao);
+      border-radius: 32px;
+      box-shadow: 0 8px 0 var(--btn-yellow-shadow);
+      cursor: pointer;
+    }
+
+    .home-level-display:active {
+      transform: translateY(6px);
+      box-shadow: 0 2px 0 var(--btn-yellow-shadow);
+    }
+
+    .home-level-label {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--cacao);
+      opacity: 0.75;
+      letter-spacing: 1px;
+    }
+
+    .home-level-number {
+      font-size: 4rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--cacao);
+    }
+
+    .home-play-btn {
+      font-size: 1.6rem;
+      padding: 18px 60px;
+    }
+
+    .status-banner {
+      background-color: #ffffff;
+      border: 4px solid var(--cacao);
+      border-radius: 20px;
+      padding: 8px 16px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1.25;
+      box-shadow: 0 5px 0 var(--cacao);
+      margin-bottom: 0;
+      text-align: center;
+      width: min(380px, 100%);
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    @keyframes status-pop {
+      0% { transform: scale(0.9); }
+      55% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    /* Bong bóng thoại hướng dẫn tương tác — nổi (position:fixed) ngay gần ô/bàn
+       tay đang chỉ, KHÔNG nằm trong luồng layout nữa nên không đẩy bàn cờ xuống.
+       Nằm ngoài #app (giống #tutorial-hand/modal) nên không bị ảnh hưởng bởi
+       transform:scale() của bàn cờ, JS tự tính left/top bằng px thật. */
+    .tutorial-bar {
+      position: fixed;
+      display: none;
+      background-color: #eafaf3;
+      border: 4px solid #2a9d8f;
+      border-radius: 18px;
+      padding: 10px 14px;
+      width: min(300px, 82vw);
+      text-align: center;
+      box-shadow: 0 5px 0 #1f7a6f;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 170;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      transition: left 0.25s ease, top 0.25s ease;
+    }
+
+    .tutorial-bar.show {
+      display: flex;
+    }
+
+    .tutorial-bar.below {
+      transform: translate(-50%, 0);
+    }
+
+    /* Đuôi bong bóng thoại trỏ về phía ô/bàn tay */
+    .tutorial-bar::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+    }
+
+    .tutorial-bar:not(.below)::after {
+      bottom: -10px;
+      border-top: 11px solid #2a9d8f;
+    }
+
+    .tutorial-bar.below::after {
+      top: -10px;
+      border-bottom: 11px solid #2a9d8f;
+    }
+
+    .tutorial-bar-text {
+      font-size: 0.92rem;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--cacao);
+    }
+
+    #tutorial-continue-btn {
+      display: none;
+      pointer-events: auto;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: #ffffff;
+      background-color: var(--btn-green);
+      border: 3px solid var(--cacao);
+      border-radius: 14px;
+      padding: 5px 14px;
+      box-shadow: 0 3px 0 var(--btn-green-shadow);
+      cursor: pointer;
+    }
+
+    #tutorial-continue-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 0 0 var(--btn-green-shadow);
+    }
+
+    .tutorial-bar.shake {
+      animation: tutorial-shake 0.4s ease;
+    }
+
+    @keyframes tutorial-shake {
+      0%, 100% { transform: translate(-50%, -100%); }
+      25% { transform: translate(calc(-50% - 6px), -100%); }
+      75% { transform: translate(calc(-50% + 6px), -100%); }
+    }
+
+    .tutorial-bar.below.shake {
+      animation: tutorial-shake-below 0.4s ease;
+    }
+
+    @keyframes tutorial-shake-below {
+      0%, 100% { transform: translate(-50%, 0); }
+      25% { transform: translate(calc(-50% - 6px), 0); }
+      75% { transform: translate(calc(-50% + 6px), 0); }
+    }
+
+    .status-banner.pulse {
+      animation: status-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* #board-outer được JS đặt đúng kích thước bàn cờ ĐÃ co giãn (để .screen-middle
+       canh giữa chuẩn xác); #game-board giữ nguyên kích thước gốc theo pixel (chứa
+       lưới ô + mèo, mèo nằm ngoài lưới để không bị xoá/tái tạo mỗi lần render) và
+       chỉ bị "scale" xuống bằng transform cho vừa khoảng trống còn lại giữa màn hình. */
+    #board-outer {
+      position: relative;
+    }
+
+    #game-board {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: top left;
+      z-index: 10;
+    }
+
+    #cells-layer {
+      display: grid;
+      grid-template-columns: repeat(5, 70px);
+      grid-template-rows: repeat(5, 70px);
+      gap: 8px;
+      background-color: var(--board-bg);
+      padding: 14px;
+      border-radius: 28px;
+      border: 4px solid var(--cacao);
+      box-shadow: 0 10px 0 var(--board-shadow), 0 14px 20px rgba(74, 48, 34, 0.15);
+      position: relative;
+    }
+
+    /* Cell Cơ bản */
+    .cell {
+      width: 70px;
+      height: 70px;
+      background-color: var(--cell-bg);
+      border: 4px solid var(--cacao);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      box-shadow: 0 5px 0 var(--cell-shadow);
+      transition: transform 0.1s ease, background-color 0.2s ease;
+      overflow: hidden;
+      /* Tắt hẳn cử chỉ chạm mặc định của hệ thống (menu ngữ cảnh, chọn văn bản khi
+         giữ lâu) trên WebView Android — nếu không, cử chỉ giữ-lâu gốc của hệ điều
+         hành sẽ tranh chấp/hủy ngang chuỗi touch trước khi bộ đếm giờ cắm cờ (JS)
+         kịp chạy xong, khiến long-press để cắm cờ không bao giờ kích hoạt được. */
+      touch-action: none;
+      -webkit-touch-callout: none;
+    }
+
+    .cell:active {
+      box-shadow: 0 2px 0 var(--cell-shadow);
+    }
+
+    /* Vòng "nạp" khi giữ ngón tay trên 1 ô ẩn để cắm cờ — cho người chơi biết đang
+       giữ đúng, sắp cắm cờ (thời lượng khớp LONG_PRESS_MS bên script.js). */
+    @keyframes press-charge {
+      from { transform: scale(0.25); opacity: 0.8; }
+      to { transform: scale(1); opacity: 0; }
+    }
+
+    .cell.pressing::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 14px;
+      border: 3px solid var(--cacao);
+      animation: press-charge 0.42s ease-out forwards;
+      pointer-events: none;
+    }
+
+    /* Lớp nội dung bên trong ô (icon/số). Mọi hiệu ứng transform (bung ô, ấn xuống)
+       chỉ áp lên lớp này, KHÔNG áp lên .cell — vì transform tạo "stacking context"
+       mới sẽ nhốt z-index của huy hiệu số góc bên trong nó, khiến mèo (z-index cao
+       hơn nhưng nằm ngoài .cell) luôn đè lên được dù huy hiệu có z-index cao hơn. */
+    .cell-inner {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s ease;
+    }
+
+    .cell:active .cell-inner {
+      transform: translateY(3px);
+    }
+
+    /* Ô vừa lộ diện: bung nhẹ ra thay vì hiện ra tức thời. Khi loang nhiều ô cùng
+       lúc, mỗi ô được gán animation-delay riêng (ở script.js) để bung theo thứ tự. */
+    @keyframes tile-pop {
+      0% { transform: scale(0.35) rotate(-6deg); opacity: 0; }
+      65% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .cell.tile-pop {
+      animation: tile-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    /* Bung kiểu ĂN MỪNG lúc thắng — nảy mạnh + xoay nhiều hơn bung thường lúc chơi,
+       để rõ ràng là hiệu ứng đặc biệt chứ không phải mở ô như bình thường. */
+    @keyframes tile-celebrate-pop {
+      0% { transform: scale(0.15) rotate(-30deg); opacity: 0; }
+      50% { transform: scale(1.35) rotate(16deg); opacity: 1; }
+      72% { transform: scale(0.88) rotate(-8deg); }
+      88% { transform: scale(1.08) rotate(3deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .cell.tile-celebrate-pop {
+      animation: tile-celebrate-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    /* Lúc mới vào màn: bung TOÀN BỘ .cell (không phải .cell-inner) — vì phần lớn ô
+       lúc này còn ẩn, .cell-inner của chúng rỗng nên phải animate cái nền ô mới
+       thấy hiệu ứng "bubble" rõ ràng. */
+    @keyframes tile-bubble-pop {
+      0% { transform: scale(0.3); opacity: 0; }
+      60% { transform: scale(1.12); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .cell.tile-bubble-pop {
+      animation: tile-bubble-pop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    /* Lúc thắng: sau khi ô đã MỞ RA (hiện số/bẫy), 1 nhịp sau nó "nổ" rồi biến mất
+       hẳn khỏi bàn cờ — áp lên .cell (không phải .cell-inner) để cả nền/viền/bóng
+       đổ/nội dung bên trong cùng co biến mất theo. "both" giữ nguyên trạng thái
+       trong suốt sau khi animation chạy xong, không cần cập nhật lại dữ liệu grid. */
+    @keyframes tile-vanish {
+      0% { transform: scale(1) rotate(0deg); opacity: 1; }
+      30% { transform: scale(1.15) rotate(8deg); opacity: 1; }
+      100% { transform: scale(0) rotate(35deg); opacity: 0; }
+    }
+
+    .cell.tile-vanish {
+      animation: tile-vanish 0.52s cubic-bezier(0.55, 0, 0.85, 0.35) both;
+    }
+
+    /* ===== MINESWEEPER-STYLE CELL STATES ===== */
+
+    /* Ô chưa mở (ẩn) - vùng nguy hiểm chưa biết */
+    .cell.hidden-tile {
+      background: repeating-linear-gradient(45deg, #ffd68a, #ffd68a 8px, #ffcb70 8px, #ffcb70 16px) !important;
+      box-shadow: 0 5px 0 #e0a940 !important;
+    }
+
+    /* Ô đã cắm cờ nghi ngờ có bẫy */
+    .cell.flagged {
+      background: repeating-linear-gradient(45deg, #ffd68a, #ffd68a 8px, #ffcb70 8px, #ffcb70 16px) !important;
+      box-shadow: 0 5px 0 #e0a940 !important;
+    }
+
+    /* Ô an toàn đã mở */
+    .cell.revealed-safe {
+      background-color: #fffdf5 !important;
+      box-shadow: 0 5px 0 #f0e6d0 !important;
+    }
+
+    /* Ô trúng bẫy (nổ) */
+    .cell.bomb-cell {
+      background: linear-gradient(135deg, #5c4033 0%, #2e1b12 100%) !important;
+      box-shadow: 0 5px 0 #1c110b !important;
+    }
+
+    /* Bẫy đã tháo ngòi nhờ hồi sinh — vẫn thấy vị trí nhưng tông màu an toàn, dễ chịu */
+    .cell.defused-cell {
+      background: linear-gradient(135deg, #d4edc0 0%, #b8dfa0 100%) !important;
+      box-shadow: 0 5px 0 #8ac926 !important;
+    }
+
+    /* Số đếm bẫy lân cận, tô màu kiểu Minesweeper cổ điển - hiển thị to, giữa ô. */
+    .num-badge {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+
+    .num-1 { color: #1976d2; }
+    .num-2 { color: #388e3c; }
+    .num-3 { color: #d32f2f; }
+    .num-4 { color: #7b1fa2; }
+    .num-5 { color: #795548; }
+    .num-6 { color: #00838f; }
+    .num-7 { color: #212121; }
+    .num-8 { color: #757575; }
+
+    /* Graphic cho Đĩa Cá */
+    .fish-plate {
+      width: 48px;
+      height: 48px;
+      background: #ffffff;
+      border: 3px solid var(--cacao);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 0 #d8c29d;
+    }
+
+    /* Cat Player Animation */
+    /* Mèo là 1 phần tử cố định duy nhất, sống bên trong #game-board (ngoài
+       #cells-layer) nên không bị tạo lại mỗi lần render — nhờ vậy transition
+       left/top bên dưới mới thật sự trượt được giữa các ô thay vì "dịch chuyển
+       tức thời". */
+    .cat-player {
+      width: 56px;
+      height: 56px;
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 15;
+      pointer-events: none;
+      animation: piffle-idle 2s infinite ease-in-out;
+      transition: left 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Biểu cảm mèo theo trạng thái: mặc định "normal", đổi bằng class trên .cat-player.
+       Mắt và miệng tách namespace riêng vì miệng cười dùng chung cho cả normal/happy
+       (chỉ đổi mắt), chỉ mất khi choáng (dizzy) — gộp chung 1 namespace "cat-expr"
+       sẽ khiến miệng bị ẩn nhầm khi sang trạng thái happy. */
+    .cat-eyes-happy, .cat-eyes-dizzy { display: none; }
+    .cat-player.expr-happy .cat-eyes-normal { display: none; }
+    .cat-player.expr-happy .cat-eyes-happy { display: block; }
+    .cat-player.expr-dizzy .cat-eyes-normal { display: none; }
+    .cat-player.expr-dizzy .cat-eyes-dizzy { display: block; }
+
+    .cat-mouth-dizzy { display: none; }
+    .cat-player.expr-dizzy .cat-mouth-normal { display: none; }
+    .cat-player.expr-dizzy .cat-mouth-dizzy { display: block; }
+
+    /* Đứng lên ô có số: chỉ mắt/mũi/miệng biến mất, thân/tai/chân giữ nguyên như cũ,
+       và số của ô đó hiện ngay tại chỗ mặt vừa biến mất. */
+    .cat-player.cat-on-number .cat-eyes,
+    .cat-player.cat-on-number .cat-mouth,
+    .cat-player.cat-on-number .cat-face-detail {
+      opacity: 0;
+    }
+
+    .cat-number-overlay {
+      opacity: 0;
+    }
+
+    .cat-player.cat-on-number .cat-number-overlay {
+      opacity: 1;
+    }
+
+    @keyframes piffle-idle {
+
+      0%,
+      100% {
+        transform: scale(1) translateY(0);
+      }
+
+      50% {
+        transform: scale(1.05, 0.95) translateY(-3px);
+      }
+    }
+
+    .cat-squash {
+      animation: piffle-squash 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    }
+
+    @keyframes piffle-squash {
+      0% {
+        transform: scale(1, 1);
+      }
+
+      30% {
+        transform: scale(1.25, 0.75);
+      }
+
+      60% {
+        transform: scale(0.85, 1.15);
+      }
+
+      100% {
+        transform: scale(1, 1);
+      }
+    }
+
+    /* Mèo THƯỞNG trang trí (khác mèo đang chơi): bật lên ngay tại ô vừa đi đúng sau
+       khi người chơi phân vân khá lâu — thuần hiệu ứng cho vui mắt, không phải mèo
+       của người chơi nên được tạo/xoá động ở script.js, gắn thẳng vào <body>. */
+    .bonus-cat-fx {
+      position: fixed;
+      font-size: 2.2rem;
+      z-index: 150;
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0);
+      animation: bonus-cat-pop 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes bonus-cat-pop {
+      0% { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; }
+      25% { transform: translate(-50%, -160%) scale(1.3) rotate(8deg); opacity: 1; }
+      50% { transform: translate(-50%, -140%) scale(1) rotate(-4deg); opacity: 1; }
+      75% { transform: translate(-50%, -180%) scale(1.05) rotate(2deg); opacity: 1; }
+      100% { transform: translate(-50%, -230%) scale(0.8) rotate(0deg); opacity: 0; }
+    }
+
+    /* Làm tối mọi thứ ngoài bàn cờ trong lúc hướng dẫn, chỉ chừa "lỗ sáng" đúng
+       khung bàn cờ — dùng box-shadow cực lớn lan ra khắp màn hình thay vì phủ 1 lớp
+       overlay to rồi khoét lỗ, để không cần che/chặn thao tác chạm vào ô bên dưới. */
+    #tutorial-spotlight {
+      position: fixed;
+      border-radius: 28px;
+      box-shadow: 0 0 0 9999px rgba(20, 14, 10, 0.68);
+      pointer-events: none;
+      z-index: 140;
+      opacity: 0;
+      transition: opacity 0.3s ease, left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease;
+    }
+
+    #tutorial-spotlight.show {
+      opacity: 1;
+    }
+
+    /* Bàn tay chỉ vào đúng ô cần bấm trong lúc hướng dẫn tương tác */
+    #tutorial-hand {
+      position: fixed;
+      font-size: 2rem;
+      z-index: 160;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      opacity: 0;
+      filter: drop-shadow(0 3px 0 rgba(74, 48, 34, 0.4));
+      transition: left 0.25s ease, top 0.25s ease;
+    }
+
+    #tutorial-hand.show {
+      opacity: 1;
+      animation: hand-bounce 0.9s ease-in-out infinite;
+    }
+
+    @keyframes hand-bounce {
+      0%, 100% { transform: translate(-50%, -100%); }
+      50% { transform: translate(-50%, -80%); }
+    }
+
+    /* Ô đích trong bước hướng dẫn: viền phát sáng nhấp nháy để dễ nhận ra.
+       Dùng ::after (không phải box-shadow) vì .hidden-tile/.flagged/.bomb-cell
+       đã set box-shadow !important — box-shadow thường sẽ bị đè mất, không hiện. */
+    @keyframes tutorial-target-pulse {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+
+    .cell.tutorial-target::after {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border-radius: 15px;
+      border: 3px solid #2a9d8f;
+      animation: tutorial-target-pulse 1s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    /* Ô kết luận là BẪY (chuẩn bị cắm cờ / né ra) -> viền đỏ thay vì xanh */
+    .cell.tutorial-target-danger::after {
+      border-color: #ff5964;
+    }
+
+    /* Ô SỐ dùng làm bằng chứng suy luận -> viền vàng, phân biệt với ô kết luận */
+    .cell.tutorial-clue::after {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border-radius: 15px;
+      border: 3px dashed #ffca3a;
+      animation: tutorial-target-pulse 1.4s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    /* Controls */
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-piffle:disabled {
+      opacity: 0.6;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .btn-piffle {
+      position: relative;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--cacao);
+      padding: 10px 18px;
+      border: 4px solid var(--cacao);
+      border-radius: 20px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.1s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Số lượng booster (Lại/Gợi Ý) người chơi đang có, ghim góc trên-phải nút —
+       hết thì đổi thành dấu "+" (màu xanh) mời mua thêm thay vì báo giá xu như cũ. */
+    .booster-badge {
+      position: absolute;
+      top: -9px;
+      right: -9px;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 5px;
+      box-sizing: border-box;
+      border-radius: 11px;
+      border: 2.5px solid var(--cacao);
+      background: #ff5964;
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .booster-badge.empty {
+      background: #8ac926;
+    }
+
+    .btn-yellow {
+      background-color: var(--btn-yellow);
+      box-shadow: 0 5px 0 var(--btn-yellow-shadow);
+    }
+
+    .btn-yellow:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 var(--btn-yellow-shadow);
+    }
+
+    .btn-pink {
+      background-color: var(--btn-pink);
+      color: #ffffff;
+      box-shadow: 0 5px 0 var(--btn-pink-shadow);
+    }
+
+    .btn-pink:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 var(--btn-pink-shadow);
+    }
+
+    .btn-green {
+      background-color: var(--btn-green);
+      color: #ffffff;
+      box-shadow: 0 5px 0 var(--btn-green-shadow);
+    }
+
+    .btn-green:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 var(--btn-green-shadow);
+    }
+
+    .btn-blue {
+      background-color: var(--btn-blue);
+      color: #ffffff;
+      box-shadow: 0 5px 0 var(--btn-blue-shadow);
+    }
+
+    .btn-blue:active {
+      transform: translateY(5px);
+      box-shadow: 0 0 0 var(--btn-blue-shadow);
+    }
+
+    /* Vòng gợi ý (Hint) -> 1 phần tử NỔI riêng (giống #tutorial-hand), JS đặt đúng vị
+       trí ô đích bằng getBoundingClientRect() (toạ độ thật ngoài màn hình, không lệ
+       thuộc CSS bên trong .cell) -> tránh mọi khả năng bị !important của .hidden-tile/
+       .flagged đè mất như khi animate trực tiếp trên .cell. */
+    #hint-ring {
+      position: fixed;
+      border: 4px solid #ffca3a;
+      border-radius: 18px;
+      box-sizing: border-box;
+      pointer-events: none;
+      z-index: 150;
+      opacity: 0;
+    }
+
+    #hint-ring.show {
+      animation: hint-ring-pulse 0.7s ease-in-out infinite;
+    }
+
+    @keyframes hint-ring-pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+
+    /* Popup thắng / thua */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(42, 26, 17, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: var(--bg-cream);
+      border: 4px solid var(--cacao);
+      border-radius: 28px;
+      box-shadow: 0 10px 0 var(--board-shadow), 0 14px 24px rgba(74, 48, 34, 0.35);
+      padding: 26px 28px 22px;
+      max-width: 320px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      text-align: center;
+      transform: scale(0.6);
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-overlay.show .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-card-closable {
+      position: relative;
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #ffffff;
+      border: 3px solid var(--cacao);
+      border-radius: 50%;
+      box-shadow: 0 3px 0 var(--cacao);
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--cacao);
+      cursor: pointer;
+    }
+
+    .modal-close-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 0 0 var(--cacao);
+    }
+
+    /* Popup THẮNG bung mạnh hơn hẳn popup thường: lắc lư quá đà rồi mới ổn định,
+       kích thích/rộn ràng hơn thay vì chỉ scale mượt như popup thua. */
+    @keyframes win-modal-bounce {
+      0% { transform: scale(0.3) rotate(-8deg); }
+      45% { transform: scale(1.18) rotate(5deg); }
+      65% { transform: scale(0.92) rotate(-3deg); }
+      82% { transform: scale(1.06) rotate(1.5deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+
+    .modal-overlay.show .modal-card.win-pop {
+      animation: win-modal-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-icon {
+      font-size: 3.6rem;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .modal-icon-img {
+      width: 52px;
+      height: 52px;
+    }
+
+    .icon-btn-img {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Icon popup thắng (😻/🏆) nhảy nhót liên tục cho rộn ràng */
+    @keyframes modal-icon-bounce {
+      0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+      25% { transform: translateY(-8px) scale(1.08) rotate(-6deg); }
+      50% { transform: translateY(0) scale(1) rotate(0deg); }
+      75% { transform: translateY(-8px) scale(1.08) rotate(6deg); }
+    }
+
+    .modal-icon.win-icon {
+      animation: modal-icon-bounce 0.7s ease-in-out infinite;
+    }
+
+    .modal-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 4px 0;
+    }
+
+    .modal-message {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 6px 0 18px;
+      color: var(--cacao);
+    }
+
+    /* Phần thưởng xu hiện trong popup thắng, bung ra kèm chút xoay cho rộn ràng */
+    .modal-coin-reward {
+      display: none;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #b8860b;
+      margin: -8px 0 16px;
+    }
+
+    .modal-coin-reward.show {
+      display: block;
+      animation: coin-reward-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes coin-reward-pop {
+      0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+      60% { transform: scale(1.25) rotate(8deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Nút trong popup co lại chia đều hàng ngang thay vì tràn dòng rồi rớt xuống
+       dưới — vd "x2 Vàng"/"Màn Tiếp" cần nằm vừa 1 hàng trong khung modal hẹp. */
+    .modal-actions .btn-piffle {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 10px 12px;
+      font-size: 0.92rem;
+      justify-content: center;
+    }
+
+    /* Popup Cài Đặt — chỉ 1 icon loa để bấm, không cần chữ */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 12px 0 20px;
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .settings-toggle:active .sound-icon {
+      transform: scale(0.92);
+    }
+
+    .sound-icon {
+      width: 56px;
+      height: 56px;
+    }
+
+    /* Mặc định hiện icon "đang bật"; khi tắt (.muted) thì đổi sang icon "đã tắt" */
+    .settings-toggle .sound-icon-off {
+      display: none;
+    }
+
+    .settings-toggle.muted .sound-icon-on {
+      display: none;
+    }
+
+    .settings-toggle.muted .sound-icon-off {
+      display: block;
+    }
+
+    /* Khung hướng dẫn chơi lần đầu */
+    .tutorial-card {
+      max-width: 360px;
+    }
+
+    .tutorial-tips {
+      text-align: left;
+      margin: 10px 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tip-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .tip-icon {
+      font-size: 1.3rem;
+      line-height: 1.3;
+      flex-shrink: 0;
+    }
+
+    .tip-text {
+      font-size: 0.92rem;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--cacao);
+    }
