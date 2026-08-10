@@ -14,8 +14,11 @@ git nên đi theo repo). Sửa/xoá/thêm tuỳ ý — không phải file hệ t
   trước khi `npx cap sync android` / build.
 - Thêm level mới: đặt tên file đúng thứ tự liên tục (không hổng số) → kiểm bằng
   `tools/level_checker.py` hoặc `tools/level_editor.html` (phải "ĐẠT" — giải được
-  bằng logic thuần, không đoán mò) → tăng `TOTAL_LEVELS` trong `script.js` → copy
-  cả JSON lẫn `script.js` vào `www/`.
+  bằng logic thuần, không đoán mò) → copy JSON vào `www/levels/`. Game tự dò
+  `levels/levelNN.json` lúc khởi động tới khi hết file (không còn khai báo số
+  lượng level ở đâu trong code) — không cần sửa gì trong `script.js` nữa. Đang
+  chạy sẵn game (browser) thì bấm nút "🔄 Làm Mới Danh Sách Level" trong cheat
+  menu để dò lại ngay, khỏi cần tải lại trang.
 - Máy dev hiện tại **không có Node/npm/JDK/Android Studio**, chỉ có Python. Test
   nhanh trên trình duyệt bằng `python -m http.server` rồi mở
   `http://localhost:<port>/Color_Flow_2.0_fixed.html` (không mở trực tiếp bằng

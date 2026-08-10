@@ -1,8 +1,8 @@
 # Cat's Yarn 🐱💣
 
 Game giải đố kiểu Minesweeper: điều khiển mèo đi qua lưới ô để tới đĩa cá, né các
-bẫy ẩn dựa vào số gợi ý trên mỗi ô đã mở. Nhiều màn (5x5 → 9x9, số màn = `TOTAL_LEVELS`
-trong `script.js`), có hệ thống xu,
+bẫy ẩn dựa vào số gợi ý trên mỗi ô đã mở. Nhiều màn (5x5 → 9x9, số màn tự dò theo
+file có trong `levels/` lúc khởi động), có hệ thống xu,
 booster (Gợi Ý / Quay Lại), hồi sinh khi thua, quảng cáo AdMob (banner + rewarded).
 
 Viết bằng HTML/CSS/JS thuần (không bundler), đóng gói thành app Android qua
@@ -46,7 +46,7 @@ File nguồn thật nằm ở thư mục gốc:
 - `script.js` — toàn bộ logic game
 - `ads.js` — tích hợp AdMob (banner + rewarded ad)
 - `style.css` — giao diện
-- `levels/level01.json` … `levelNN.json` — dữ liệu từng màn (load bằng `fetch()` lúc khởi động, mỗi màn 1 file riêng cho dễ sửa). Thêm màn mới: đặt file kế tiếp theo đúng số thứ tự liên tục rồi tăng `TOTAL_LEVELS` trong `script.js` cho khớp — game chỉ nạp đúng số lượng file bằng con số này, không tự quét thư mục. Nên kiểm bằng `tools/level_checker.py` hoặc `tools/level_editor.html` trước khi thêm, để đảm bảo màn giải được bằng logic thuần.
+- `levels/level01.json` … `levelNN.json` — dữ liệu từng màn (load bằng `fetch()` lúc khởi động, mỗi màn 1 file riêng cho dễ sửa). Game tự dò tuần tự `levelNN.json` tới khi gặp file không tồn tại thì dừng — thêm màn mới chỉ cần đặt đúng tên file kế tiếp theo thứ tự liên tục (không hổng số), không cần sửa code. Nên kiểm bằng `tools/level_checker.py` hoặc `tools/level_editor.html` trước khi thêm, để đảm bảo màn giải được bằng logic thuần.
 
 Thư mục `www/` là **bản sao** mà Capacitor thực sự đóng gói vào app. Sau khi sửa
 bất kỳ file nào ở trên, phải copy lại vào `www/` rồi sync trước khi build:
@@ -81,7 +81,7 @@ Color_Flow_2.0_fixed.html   HTML nguồn
 script.js                   Logic game
 ads.js                      Tích hợp AdMob
 style.css                   Giao diện
-levels/                     Dữ liệu từng màn (JSON), số màn = TOTAL_LEVELS trong script.js
+levels/                     Dữ liệu từng màn (JSON), game tự dò số màn lúc khởi động
 tools/                      Công cụ dev: kiểm/tạo level (không đóng gói vào app)
 icon/                       Icon dùng trong UI
 sfx/, victory.mp3           Âm thanh

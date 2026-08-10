@@ -368,19 +368,36 @@ function animateFX() {
 // nhất một ô kề suy luận được chắc chắn an toàn để bước tới, không cần đoán mò —
 // và mỗi lần mở chỉ lộ ra một mảng nhỏ (không "1 phát ăn hết bàn cờ" như bản cũ).
 // Ô cạnh Start luôn được đảm bảo không có bẫy để nước đi đầu tiên không phải may rủi.
-// Dữ liệu từng level nằm riêng trong levels/level01.json .. levelNN.json (dễ thêm/sửa
-// từng level mà không phải đụng vào file code chính) — nạp hết bằng fetch() song song
-// lúc khởi động, xong mới init phần còn lại của game (xem loadLevels() cuối file).
-// Thêm level mới -> tăng con số này, đảm bảo file levelNN.json tương ứng đã tồn tại
-// (đặt tên đúng thứ tự liên tục, không để hổng số).
+// Dữ liệu từng level nằm riêng trong levels/level01.json, level02.json,... (dễ thêm/sửa
+// từng level mà không phải đụng vào file code chính). KHÔNG khai báo số lượng level ở
+// đâu cả — loadLevels() tự dò tuần tự levelNN.json cho tới khi gặp file không tồn tại
+// (404/lỗi) thì dừng, nên thêm level mới chỉ cần đặt đúng tên file kế tiếp theo thứ tự
+// liên tục (không hổng số), không phải sửa code. Nút "Làm Mới Danh Sách Level" trong
+// cheat menu (cheatRefreshLevels()) dò lại ngay trong lúc game đang chạy, tiện lúc đang
+// test mà vừa thêm file level mới, khỏi phải tải lại trang.
 // =============================================================================
-const TOTAL_LEVELS = 31;
 let LEVELS = [];
 
+async function fetchLevelFile(idx) {
+    try {
+        const res = await fetch(`levels/level${String(idx).padStart(2, '0')}.json`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null; // file không tồn tại hoặc lỗi mạng -> coi như hết level ở đây
+    }
+}
+
 async function loadLevels() {
-    const files = Array.from({ length: TOTAL_LEVELS }, (_, i) =>
-        `levels/level${String(i + 1).padStart(2, '0')}.json`);
-    LEVELS = await Promise.all(files.map(f => fetch(f).then(r => r.json())));
+    const found = [];
+    let idx = 1;
+    while (true) {
+        const data = await fetchLevelFile(idx);
+        if (!data) break;
+        found.push(data);
+        idx++;
+    }
+    LEVELS = found;
 }
 
 let currentLevelIdx = 0;
@@ -1800,6 +1817,22 @@ function populateCheatLevelSelect() {
         select.appendChild(opt);
     }
     select.value = currentLevelIdx;
+}
+
+// Dò lại levels/levelNN.json ngay trong lúc game đang chạy (không cần tải lại trang) —
+// tiện lúc đang test mà vừa thêm file level mới vào thư mục levels/.
+async function cheatRefreshLevels(btn) {
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = '⏳ Đang dò...';
+    await loadLevels();
+    populateCheatLevelSelect();
+    renderHomeScreen();
+    btn.innerText = `✅ Tìm thấy ${LEVELS.length} level!`;
+    setTimeout(() => {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }, 1500);
 }
 
 function openCheatMenu() {
