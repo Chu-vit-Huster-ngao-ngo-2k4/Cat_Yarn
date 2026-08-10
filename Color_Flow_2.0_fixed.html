@@ -26,7 +26,10 @@
         <div class="header">
           <h1 id="game-title">CAT'S YARN</h1>
         </div>
-        <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+        <div class="home-top-row">
+          <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+          <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+        </div>
       </div>
 
       <div class="screen-middle">
@@ -102,6 +105,30 @@
       </div>
       <div class="settings-row">
         <button class="btn-piffle btn-pink" onclick="replayFromSettings()">🔄 Chơi Lại</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings riêng cho màn Home — không có "Chơi Lại" (chưa vào màn nào), thêm
+       Nhạc (chưa làm, để chỗ sẵn) + Privacy Policy + Liên hệ. -->
+  <div id="home-settings-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="hideHomeSettings()" title="Đóng">×</button>
+      <div class="modal-icon"><img class="modal-icon-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></div>
+      <h2 class="modal-title" style="color:#4a3022;">Cài Đặt</h2>
+      <div class="settings-row">
+        <button class="settings-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
+          <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
+          <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
+        </button>
+      </div>
+      <div class="settings-row settings-row-soon">
+        <span class="settings-soon-icon">🎵</span>
+        <span class="settings-soon-label">Nhạc nền — sắp có</span>
+      </div>
+      <div class="settings-links">
+        <a class="settings-link-btn" href="https://chu-vit-huster-ngao-ngo-2k4.github.io/Cat_Yarn/privacy-policy.html" target="_blank" rel="noopener">🔒 Chính Sách Quyền Riêng Tư</a>
+        <a class="settings-link-btn" href="mailto:buivanbinh1310@gmail.com">✉️ Liên Hệ</a>
       </div>
     </div>
   </div>

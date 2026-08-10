@@ -75,10 +75,12 @@ function toggleAudio() {
     updateSoundToggleUI();
 }
 
+// Dùng chung cho cả nút loa trong settings-modal (màn chơi) lẫn home-settings-modal
+// (màn Home) — 2 modal khác nhau nhưng cùng chia sẻ 1 trạng thái soundEnabled.
 function updateSoundToggleUI() {
-    const btn = document.getElementById('settings-sound-toggle');
-    if (!btn) return;
-    btn.classList.toggle('muted', !soundEnabled);
+    document.querySelectorAll('.settings-toggle').forEach(btn => {
+        btn.classList.toggle('muted', !soundEnabled);
+    });
 }
 
 function showSettings() {
@@ -94,6 +96,21 @@ function replayFromSettings() {
     hideSettings();
     loadLevel(currentLevelIdx);
 }
+
+// Settings riêng cho màn Home (Âm thanh + Nhạc "sắp có" + Privacy + Liên hệ) —
+// không có "Chơi Lại" vì chưa vào màn nào để replay.
+function showHomeSettings() {
+    updateSoundToggleUI();
+    document.getElementById('home-settings-modal').classList.add('show');
+}
+
+function hideHomeSettings() {
+    document.getElementById('home-settings-modal').classList.remove('show');
+}
+
+document.getElementById('home-settings-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'home-settings-modal') hideHomeSettings();
+});
 
 document.getElementById('settings-modal').addEventListener('click', (e) => {
     if (e.target.id === 'settings-modal') hideSettings();
@@ -1870,11 +1887,16 @@ window.addEventListener('keydown', (e) => {
 if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
     window.Capacitor.Plugins.App.addListener('backButton', () => {
         const settingsModal = document.getElementById('settings-modal');
+        const homeSettingsModal = document.getElementById('home-settings-modal');
         const tutorialModal = document.getElementById('tutorial-modal');
         const resultModal = document.getElementById('result-modal');
 
         if (settingsModal.classList.contains('show')) {
             hideSettings();
+            return;
+        }
+        if (homeSettingsModal.classList.contains('show')) {
+            hideHomeSettings();
             return;
         }
         if (tutorialModal.classList.contains('show')) {

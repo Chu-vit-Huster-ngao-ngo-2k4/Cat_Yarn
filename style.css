@@ -221,6 +221,15 @@
       font-size: 1.1rem;
     }
 
+    /* Hàng ngang chứa huy hiệu xu + nút Cài đặt ở màn Home */
+    .home-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
     /* Huy hiệu số xu hiện có — nhún nhẹ mỗi khi cộng thêm xu */
     .coin-badge {
       background-color: #fff3c4;
@@ -230,7 +239,6 @@
       padding: 4px 14px;
       font-weight: 700;
       font-size: 1rem;
-      margin-bottom: 10px;
     }
 
     @keyframes coin-badge-pop {
@@ -1108,6 +1116,55 @@
       align-items: center;
       justify-content: center;
       margin: 12px 0 20px;
+    }
+
+    /* Hàng "Nhạc nền — sắp có" trong Settings màn Home: nhạt màu, chưa bấm được,
+       chỉ đánh dấu chỗ dành sẵn cho tính năng tương lai. */
+    .settings-row-soon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: -8px 0 20px;
+      padding: 8px 14px;
+      border: 2px dashed var(--cacao);
+      border-radius: 12px;
+      opacity: 0.55;
+    }
+
+    .settings-soon-icon {
+      font-size: 1.1rem;
+    }
+
+    .settings-soon-label {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--cacao);
+    }
+
+    .settings-links {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .settings-link-btn {
+      display: block;
+      text-decoration: none;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--cacao);
+      background: #fff;
+      border: 2px solid var(--cacao);
+      border-radius: 12px;
+      padding: 10px 14px;
+      text-align: center;
+    }
+
+    .settings-link-btn:active {
+      transform: translateY(2px);
     }
 
     .settings-toggle {
