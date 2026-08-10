@@ -1120,6 +1120,46 @@
       justify-content: center;
     }
 
+    /* ===== DEV CHEAT MENU (chi mo qua thao tac bi mat, xem attachCheatMenuTrigger()) ===== */
+    .cheat-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+
+    .cheat-row label {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--cacao);
+    }
+
+    #cheat-level-select {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 2px solid var(--cacao);
+      background: #fff;
+      color: var(--cacao);
+    }
+
+    /* O bay bi lo qua cheat "Hien Bay" — chi la lop phu ngoai, khong dung vao
+       cell.revealed nen khong anh huong luat choi that. */
+    .cell.cheat-trap-reveal::after {
+      content: '💣';
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      font-size: 14px;
+      line-height: 1;
+      pointer-events: none;
+    }
+
     .settings-toggle:active .sound-icon {
       transform: scale(0.92);
     }

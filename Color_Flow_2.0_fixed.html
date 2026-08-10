@@ -24,7 +24,7 @@
     <div id="screen-home" class="screen">
       <div class="screen-top">
         <div class="header">
-          <h1>CAT'S YARN</h1>
+          <h1 id="game-title">CAT'S YARN</h1>
         </div>
         <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
       </div>
@@ -70,7 +70,6 @@
         <div class="controls">
           <button class="btn-piffle btn-yellow" onclick="undo()">↩️ Lại<span class="booster-badge" id="undo-badge">3</span></button>
           <button class="btn-piffle btn-blue" id="hint-btn" onclick="useHint()">💡 Gợi Ý<span class="booster-badge" id="hint-badge">3</span></button>
-          <button class="btn-piffle btn-green" id="next-btn" style="display:none;" onclick="nextLevel()">⏩ Màn Tiếp</button>
         </div>
       </div>
     </div>
@@ -116,6 +115,30 @@
       <div class="modal-actions">
         <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)">🪙 Mua (100)</button>
         <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)">📺 Xem QC</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEV CHEAT MENU — chỉ lộ ra khi bấm liên tiếp vào tiêu đề CAT'S YARN 7 lần
+       (xem attachCheatMenuTrigger() trong script.js), người chơi thường không đụng phải. -->
+  <div id="cheat-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="hideCheatMenu()" title="Đóng">×</button>
+      <div class="modal-icon">🛠️</div>
+      <h2 class="modal-title" style="color:#4a3022;">Dev Cheat</h2>
+      <div class="cheat-row">
+        <label for="cheat-level-select">Nhảy tới level:</label>
+        <select id="cheat-level-select"></select>
+        <button class="btn-piffle btn-blue" onclick="cheatGoToLevel()">▶ Đi</button>
+      </div>
+      <div class="cheat-row">
+        <button class="btn-piffle btn-yellow" onclick="cheatAddCoins()">🪙 +9999 Xu</button>
+      </div>
+      <div class="cheat-row">
+        <button class="btn-piffle btn-blue" onclick="cheatRefillBoosters()">♾️ Đầy Gợi Ý / Lại</button>
+      </div>
+      <div class="cheat-row">
+        <button class="btn-piffle btn-pink" id="cheat-toggle-traps-btn" onclick="cheatToggleShowTraps()">👁️ Hiện Bẫy: TẮT</button>
       </div>
     </div>
   </div>

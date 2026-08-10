@@ -381,11 +381,13 @@ function animateFX() {
 // nhất một ô kề suy luận được chắc chắn an toàn để bước tới, không cần đoán mò —
 // và mỗi lần mở chỉ lộ ra một mảng nhỏ (không "1 phát ăn hết bàn cờ" như bản cũ).
 // Ô cạnh Start luôn được đảm bảo không có bẫy để nước đi đầu tiên không phải may rủi.
-// Dữ liệu từng level nằm riêng trong levels/level01.json .. level30.json (dễ thêm/sửa
+// Dữ liệu từng level nằm riêng trong levels/level01.json .. levelNN.json (dễ thêm/sửa
 // từng level mà không phải đụng vào file code chính) — nạp hết bằng fetch() song song
 // lúc khởi động, xong mới init phần còn lại của game (xem loadLevels() cuối file).
+// Thêm level mới -> tăng con số này, đảm bảo file levelNN.json tương ứng đã tồn tại
+// (đặt tên đúng thứ tự liên tục, không để hổng số).
 // =============================================================================
-const TOTAL_LEVELS = 30;
+const TOTAL_LEVELS = 31;
 let LEVELS = [];
 
 async function loadLevels() {
@@ -808,7 +810,6 @@ function loadLevel(idx) {
     ctx.clearRect(0, 0, canvas.logicalWidth, canvas.logicalHeight);
 
     document.getElementById('level-title').innerText = `Level ${currentLevelIdx + 1}`;
-    document.getElementById('next-btn').style.display = 'none';
     updateStatus('Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
     hideResultModal();
 
@@ -1096,6 +1097,10 @@ function render(instant) {
             el.classList.add('cell');
             el.dataset.row = r;
             el.dataset.col = c;
+
+            if (cheatShowTraps && !cell.revealed && cell.type === 'B') {
+                el.classList.add('cheat-trap-reveal');
+            }
 
             if (tutorialActive) {
                 const step = TUTORIAL_STEPS[tutorialStep];
@@ -1589,9 +1594,6 @@ function revealAndMove(r, c) {
         markLevelCompleted(currentLevelIdx);
 
         const hasNextLevel = currentLevelIdx < LEVELS.length - 1;
-        if (hasNextLevel) {
-            document.getElementById('next-btn').style.display = 'flex';
-        }
 
         setTimeout(() => {
             if (myGeneration !== levelGeneration) return; // đã Replay/đổi màn giữa chừng
@@ -1769,6 +1771,88 @@ function undo() {
     triggerSquashAnimation();
 }
 
+// =============================================================================
+// DEV CHEAT MENU — chỉ dành cho lúc phát triển/test, KHÔNG lộ ra với người chơi
+// thường: phải bấm liên tiếp 7 lần vào tiêu đề "CAT'S YARN" ở màn Home trong vòng
+// 1.5s mới mở được (xem attachCheatMenuTrigger()), không có nút/menu nào khác dẫn
+// tới đây. Code vẫn nằm trong bản build bình thường (không cần bước loại trừ khỏi
+// www/ riêng) vì hoàn toàn im lìm nếu không ai biết thao tác bí mật.
+// =============================================================================
+const CHEAT_TAP_COUNT = 7;
+const CHEAT_TAP_WINDOW_MS = 1500;
+let cheatTapCount = 0;
+let cheatTapLastTime = 0;
+let cheatShowTraps = false;
+
+function attachCheatMenuTrigger() {
+    const title = document.getElementById('game-title');
+    if (!title) return;
+    title.addEventListener('click', () => {
+        const now = Date.now();
+        if (now - cheatTapLastTime > CHEAT_TAP_WINDOW_MS) cheatTapCount = 0;
+        cheatTapLastTime = now;
+        cheatTapCount++;
+        if (cheatTapCount >= CHEAT_TAP_COUNT) {
+            cheatTapCount = 0;
+            openCheatMenu();
+        }
+    });
+}
+
+function populateCheatLevelSelect() {
+    const select = document.getElementById('cheat-level-select');
+    if (!select) return;
+    select.innerHTML = '';
+    for (let i = 0; i < LEVELS.length; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Level ${i + 1}`;
+        select.appendChild(opt);
+    }
+    select.value = currentLevelIdx;
+}
+
+function openCheatMenu() {
+    populateCheatLevelSelect();
+    document.getElementById('cheat-toggle-traps-btn').innerText = cheatShowTraps ? '👁️ Hiện Bẫy: BẬT' : '👁️ Hiện Bẫy: TẮT';
+    document.getElementById('cheat-modal').classList.add('show');
+}
+
+function hideCheatMenu() {
+    document.getElementById('cheat-modal').classList.remove('show');
+}
+
+document.getElementById('cheat-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'cheat-modal') hideCheatMenu();
+});
+
+function cheatGoToLevel() {
+    const select = document.getElementById('cheat-level-select');
+    const idx = parseInt(select.value, 10);
+    if (!LEVELS.length || isNaN(idx) || idx < 0 || idx >= LEVELS.length) return;
+    hideCheatMenu();
+    showScreen('game');
+    loadLevel(idx);
+    fitBoardToSpace();
+}
+
+function cheatAddCoins() {
+    awardCoins(9999);
+}
+
+function cheatRefillBoosters() {
+    hintCount = 99;
+    undoCount = 99;
+    saveBoosterCounts();
+    updateBoosterBadges();
+}
+
+function cheatToggleShowTraps() {
+    cheatShowTraps = !cheatShowTraps;
+    document.getElementById('cheat-toggle-traps-btn').innerText = cheatShowTraps ? '👁️ Hiện Bẫy: BẬT' : '👁️ Hiện Bẫy: TẮT';
+    if (grid) render(); // chi re-render neu dang o giua 1 man choi (grid da duoc khoi tao)
+}
+
 window.addEventListener('keydown', (e) => {
     if (!playerPos || isWalking) return; // đang ở màn Home, hoặc mèo đang tự chạy tới ô xa
     let { r, c } = playerPos;
@@ -1822,6 +1906,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
     renderHomeScreen();
     showScreen('home');
     maybeShowTutorialOnFirstVisit();
+    attachCheatMenuTrigger();
     initAds(); // không await — banner load nền, không được làm chậm màn Home
 })();
   

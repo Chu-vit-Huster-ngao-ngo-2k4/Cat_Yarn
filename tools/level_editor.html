@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cat's Yarn — Level Editor</title>
+<style>
+  :root {
+    --cream: #fdf6ec;
+    --panel: #fffaf1;
+    --ink: #4a3022;
+    --ink-soft: #8c6a52;
+    --line: #e6d9c4;
+    --teal: #2a9d8f;
+    --red: #ff5964;
+    --yellow: #ffca3a;
+    --green: #8ac926;
+    --blue: #1982c4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    padding: 20px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--ink-soft); font-size: 13px; margin: 0 0 18px; }
+  .layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .panel {
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 14px;
+    margin: 0 0 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+  }
+  .controls-col { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+  .board-col { flex: 1; min-width: 320px; }
+
+  .size-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .size-row label { font-size: 13px; width: 46px; }
+  .size-row input {
+    width: 60px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 14px; background: white; color: var(--ink);
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    background: var(--ink-soft);
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+  button.full { width: 100%; }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mode-btn { background: white; color: var(--ink); border: 2px solid var(--line); }
+  .mode-btn.active { border-color: var(--ink); background: #f3e9d8; }
+  .mode-btn.mode-trap.active { border-color: var(--red); background: #ffe4e6; }
+  .mode-btn.mode-start.active { border-color: var(--blue); background: #e3f1fb; }
+  .mode-btn.mode-end.active { border-color: var(--teal); background: #e2f5f2; }
+
+  .action-btn.check { background: var(--teal); }
+  .action-btn.reset { background: var(--red); }
+  .action-btn.resize { background: var(--blue); }
+  .action-btn.copy { background: var(--ink-soft); }
+  .action-btn.download { background: var(--green); color: var(--ink); }
+
+  #board-wrap { overflow: auto; padding: 6px; }
+  #board {
+    display: inline-grid;
+    gap: 4px;
+    background: var(--line);
+    padding: 4px;
+    border-radius: 10px;
+  }
+  .cell {
+    width: 40px; height: 40px;
+    background: white;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700;
+    color: var(--ink-soft);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: transform 0.06s ease;
+  }
+  .cell:hover { transform: scale(1.06); }
+  .cell.is-start { background: var(--blue); color: white; }
+  .cell.is-end { background: var(--teal); color: white; }
+  .cell.is-trap { background: #4a3022; color: #ffca3a; }
+  .cell.count-0 { color: var(--line); }
+  .cell.stuck::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 6px;
+    border: 3px dashed var(--yellow);
+    box-sizing: border-box;
+  }
+  .cell.firstmove-bad::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 6px;
+    border: 3px solid var(--red);
+    box-sizing: border-box;
+  }
+
+  .status-line { font-size: 13px; min-height: 18px; color: var(--ink-soft); margin-top: 6px; }
+
+  .report { font-size: 13px; line-height: 1.6; }
+  .report .ok { color: var(--teal); }
+  .report .fail { color: var(--red); font-weight: 700; }
+  .report .warn { color: #b98900; }
+  .report ul { margin: 4px 0 10px; padding-left: 18px; }
+  .report .verdict {
+    margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-weight: 700; text-align: center;
+  }
+  .report .verdict.pass { background: #e2f5f2; color: var(--teal); }
+  .report .verdict.fail { background: #ffe4e6; color: var(--red); }
+  .report .empty { color: var(--ink-soft); font-style: italic; }
+
+  textarea#json-out {
+    width: 100%; height: 180px; font-family: Consolas, Menlo, monospace; font-size: 12.5px;
+    padding: 10px; border: 1px solid var(--line); border-radius: 8px; resize: vertical;
+    background: #fffdf8; color: var(--ink);
+  }
+  .export-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .export-actions button { flex: 1; }
+  .filename-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .filename-row input {
+    flex: 1; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px;
+  }
+  .legend { font-size: 12px; color: var(--ink-soft); line-height: 1.6; margin-top: 4px; }
+  .legend span.swatch {
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle;
+  }
+</style>
+</head>
+
+<body>
+
+  <h1>🐱🧶 Cat's Yarn — Level Editor</h1>
+  <p class="subtitle">
+    Vẽ level trực quan, tự động chấm "có giải được bằng logic thuần không" (mô phỏng đúng thuật toán trong
+    <code>script.js</code>), rồi xuất thẳng ra JSON đúng định dạng để dán vào <code>levels/</code>.
+    Chạy 100% trong trình duyệt — mở file này trực tiếp (double-click) là dùng được, không cần server.
+  </p>
+
+  <div class="layout">
+
+    <div class="controls-col">
+
+      <div class="panel">
+        <h2>Kích thước lưới</h2>
+        <div class="size-row">
+          <label for="rows-input">Hàng</label>
+          <input type="number" id="rows-input" min="3" max="15" value="5">
+        </div>
+        <div class="size-row">
+          <label for="cols-input">Cột</label>
+          <input type="number" id="cols-input" min="3" max="15" value="5">
+        </div>
+        <button class="action-btn resize full" id="btn-resize">↔️ Áp dụng kích thước</button>
+      </div>
+
+      <div class="panel">
+        <h2>Chế độ vẽ</h2>
+        <div class="mode-grid">
+          <button class="mode-btn mode-trap active" data-mode="trap">💣 Bẫy</button>
+          <button class="mode-btn mode-start" data-mode="start">🐱 Xuất Phát</button>
+          <button class="mode-btn mode-end" data-mode="end">🐟 Đích</button>
+          <button class="mode-btn" data-mode="erase">⬜ Xoá</button>
+        </div>
+        <div class="status-line" id="mode-status">Chế độ: bấm ô để cắm/gỡ bẫy.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Hành động</h2>
+        <button class="action-btn check full" id="btn-check">✅ Kiểm tra logic</button>
+        <div style="height:8px"></div>
+        <button class="action-btn reset full" id="btn-reset">🗑️ Làm lại từ đầu</button>
+        <div style="height:8px"></div>
+        <label class="ghost full" style="display:block; text-align:center; padding:9px 14px; border-radius:10px; border:1px solid var(--line); font-size:13px; font-weight:600;">
+          📂 Nạp file JSON có sẵn
+          <input type="file" id="file-input" accept=".json" style="display:none;">
+        </label>
+        <div class="legend">
+          <div><span class="swatch" style="background:#1982c4"></span>Xuất phát (S)</div>
+          <div><span class="swatch" style="background:#2a9d8f"></span>Đích (E)</div>
+          <div><span class="swatch" style="background:#4a3022"></span>Bẫy (#)</div>
+          <div><span class="swatch" style="border:2px dashed #ffca3a"></span>Ô còn kẹt (cần đoán mò)</div>
+          <div><span class="swatch" style="border:2px solid #ff5964"></span>Bẫy sát Start (vi phạm luật)</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="board-col">
+      <div class="panel">
+        <h2>Bàn cờ (số hiện sẵn để bạn dễ thiết kế — trong game thật số chỉ lộ ra khi mở ô)</h2>
+        <div id="board-wrap"><div id="board"></div></div>
+      </div>
+
+      <div style="height:16px"></div>
+
+      <div class="panel">
+        <h2>Kết quả kiểm tra</h2>
+        <div class="report" id="report"><p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p></div>
+      </div>
+
+      <div style="height:16px"></div>
+
+      <div class="panel">
+        <h2>Xuất JSON</h2>
+        <div class="filename-row">
+          <span style="font-size:13px; color:var(--ink-soft);">Tên file:</span>
+          <input type="text" id="filename-input" value="level31.json">
+        </div>
+        <textarea id="json-out" readonly></textarea>
+        <div class="export-actions">
+          <button class="action-btn copy" id="btn-copy">📋 Copy JSON</button>
+          <button class="action-btn download" id="btn-download">⬇️ Tải file .json</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+// =============================================================================
+// STATE — cells[r*cols+c]: 0 = trong, 1 = bay (#), 2 = xuat phat (S), 3 = dich (E)
+// =============================================================================
+const state = {
+  rows: 5,
+  cols: 5,
+  cells: [],
+  mode: 'trap',
+};
+
+function idx(r, c) { return r * state.cols + c; }
+
+function newGrid(rows, cols) {
+  const cells = new Array(rows * cols).fill(0);
+  cells[0] = 2; // S mac dinh goc tren trai
+  cells[rows * cols - 1] = 3; // E mac dinh goc duoi phai
+  return cells;
+}
+
+state.cells = newGrid(state.rows, state.cols);
+
+// =============================================================================
+// SOLVER — port 1:1 tu findHintCell()/floodReveal() trong script.js va
+// tools/level_checker.py, dam bao ket qua khop voi luat game that.
+// =============================================================================
+const DIRS8 = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+const DIRS4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+function findSpecial(cells, rows, cols, code) {
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (cells[r * cols + c] === code) return { r, c };
+  return null;
+}
+
+function computeCounts(cells, rows, cols) {
+  const counts = new Array(rows * cols).fill(0);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      let cnt = 0;
+      for (const [dr, dc] of DIRS8) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        if (cells[nr * cols + nc] === 1) cnt++;
+      }
+      counts[r * cols + c] = cnt;
+    }
+  }
+  return counts;
+}
+
+function runChecker() {
+  const { rows, cols, cells } = state;
+  const counts = computeCounts(cells, rows, cols);
+  const sPos = findSpecial(cells, rows, cols, 2);
+  const ePos = findSpecial(cells, rows, cols, 3);
+
+  const errors = [];
+  if (!sPos) errors.push('Chưa đặt ô Xuất Phát (S).');
+  if (!ePos) errors.push('Chưa đặt ô Đích (E).');
+  if (errors.length) return { errors, counts };
+
+  const isTrap = (r, c) => cells[idx2(r, c, cols)] === 1;
+  const idx2 = (r, c, cols) => r * cols + c;
+  const key = (r, c) => r + ',' + c;
+
+  const revealed = new Array(rows * cols).fill(false);
+  revealed[idx2(sPos.r, sPos.c, cols)] = true;
+
+  const firstMoveBad = [];
+  for (const [dr, dc] of DIRS4) {
+    const nr = sPos.r + dr, nc = sPos.c + dc;
+    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && isTrap(nr, nc)) firstMoveBad.push({ r: nr, c: nc });
+  }
+
+  function floodReveal(r, c) {
+    const queue = [[r, c]];
+    while (queue.length) {
+      const [cr, cc] = queue.shift();
+      for (const [dr, dc] of DIRS8) {
+        const nr = cr + dr, nc = cc + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        if (revealed[idx2(nr, nc, cols)] || isTrap(nr, nc)) continue;
+        revealed[idx2(nr, nc, cols)] = true;
+        if (cells[idx2(nr, nc, cols)] === 0 && counts[idx2(nr, nc, cols)] === 0) queue.push([nr, nc]);
+      }
+    }
+  }
+
+  // Nuoc di dau tien: cac o ke Start (4 huong) mac dinh an toan theo thiet ke.
+  for (const [dr, dc] of DIRS4) {
+    const nr = sPos.r + dr, nc = sPos.c + dc;
+    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+    if (revealed[idx2(nr, nc, cols)] || isTrap(nr, nc)) continue;
+    revealed[idx2(nr, nc, cols)] = true;
+    if (cells[idx2(nr, nc, cols)] === 0 && counts[idx2(nr, nc, cols)] === 0) floodReveal(nr, nc);
+  }
+
+  function eReachable() {
+    if (revealed[idx2(ePos.r, ePos.c, cols)]) return true;
+    for (const [dr, dc] of DIRS4) {
+      const nr = ePos.r + dr, nc = ePos.c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && revealed[idx2(nr, nc, cols)]) return true;
+    }
+    return false;
+  }
+
+  let reachedE = eReachable();
+
+  function deduceOnce() {
+    const deducedSafe = new Set(), deducedMine = new Set();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (!revealed[idx2(r, c, cols)] || cells[idx2(r, c, cols)] !== 0) continue;
+          const hidden = [];
+          for (const [dr, dc] of DIRS8) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+            if (!revealed[idx2(nr, nc, cols)]) hidden.push(key(nr, nc));
+          }
+          if (!hidden.length) continue;
+          const cnt = counts[idx2(r, c, cols)];
+          const knownMines = hidden.filter(k => deducedMine.has(k));
+          const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
+          const remaining = cnt - knownMines.length;
+          if (remaining === 0 && unknown.length) {
+            unknown.forEach(k => { if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; } });
+          } else if (remaining === unknown.length && unknown.length) {
+            unknown.forEach(k => { if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; } });
+          }
+        }
+      }
+    }
+    return deducedSafe;
+  }
+
+  while (true) {
+    const deducedSafe = deduceOnce();
+    let newlyRevealed = false;
+    deducedSafe.forEach(k => {
+      const [r, c] = k.split(',').map(Number);
+      if (!revealed[idx2(r, c, cols)]) {
+        revealed[idx2(r, c, cols)] = true;
+        newlyRevealed = true;
+        if (cells[idx2(r, c, cols)] === 0 && counts[idx2(r, c, cols)] === 0) floodReveal(r, c);
+      }
+    });
+    if (!reachedE) reachedE = eReachable();
+    if (!newlyRevealed) break;
+  }
+
+  const stuckCells = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (!revealed[idx2(r, c, cols)] && !isTrap(r, c)) stuckCells.push({ r, c });
+
+  return {
+    sPos, ePos, counts, firstMoveBad, reachedE,
+    fullySolved: stuckCells.length === 0, stuckCells,
+  };
+}
+
+// =============================================================================
+// RENDER
+// =============================================================================
+let lastResult = null;
+
+function cellLabel({ r, c }) { return `(${r},${c})`; }
+
+function render() {
+  const board = document.getElementById('board');
+  board.style.gridTemplateColumns = `repeat(${state.cols}, 40px)`;
+  board.innerHTML = '';
+
+  const counts = computeCounts(state.cells, state.rows, state.cols);
+  const stuckSet = new Set((lastResult && lastResult.stuckCells || []).map(p => p.r + ',' + p.c));
+  const badSet = new Set((lastResult && lastResult.firstMoveBad || []).map(p => p.r + ',' + p.c));
+
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      const t = state.cells[idx(r, c)];
+      const el = document.createElement('div');
+      el.className = 'cell';
+      if (t === 2) { el.classList.add('is-start'); el.textContent = '🐱'; }
+      else if (t === 3) { el.classList.add('is-end'); el.textContent = '🐟'; }
+      else if (t === 1) { el.classList.add('is-trap'); el.textContent = '💣'; }
+      else {
+        const n = counts[idx(r, c)];
+        el.textContent = n > 0 ? n : '';
+        if (n === 0) el.classList.add('count-0');
+      }
+      if (stuckSet.has(r + ',' + c)) el.classList.add('stuck');
+      if (badSet.has(r + ',' + c)) el.classList.add('firstmove-bad');
+      el.addEventListener('click', () => handleCellClick(r, c));
+      board.appendChild(el);
+    }
+  }
+
+  updateJsonOutput();
+}
+
+function handleCellClick(r, c) {
+  const i = idx(r, c);
+  const t = state.cells[i];
+  const mode = state.mode;
+  const status = document.getElementById('mode-status');
+
+  if (mode === 'trap') {
+    if (t === 2 || t === 3) { status.textContent = 'Không thể đặt bẫy lên ô Xuất Phát / Đích.'; return; }
+    state.cells[i] = t === 1 ? 0 : 1;
+  } else if (mode === 'erase') {
+    if (t === 2 || t === 3) { status.textContent = 'Dùng nút Xuất Phát/Đích ở ô khác để dời, không xoá trực tiếp.'; return; }
+    state.cells[i] = 0;
+  } else if (mode === 'start') {
+    if (t === 3) { status.textContent = 'Ô này đang là Đích, không thể đặt Xuất Phát đè lên.'; return; }
+    const old = findSpecial(state.cells, state.rows, state.cols, 2);
+    if (old) state.cells[idx(old.r, old.c)] = 0;
+    state.cells[i] = 2;
+  } else if (mode === 'end') {
+    if (t === 2) { status.textContent = 'Ô này đang là Xuất Phát, không thể đặt Đích đè lên.'; return; }
+    const old = findSpecial(state.cells, state.rows, state.cols, 3);
+    if (old) state.cells[idx(old.r, old.c)] = 0;
+    state.cells[i] = 3;
+  }
+
+  lastResult = null; // vua sua thi ket qua kiem tra cu khong con dung nua
+  render();
+}
+
+// =============================================================================
+// REPORT
+// =============================================================================
+function showReport(result) {
+  const el = document.getElementById('report');
+  if (result.errors) {
+    el.innerHTML = `<ul>${result.errors.map(e => `<li class="fail">${e}</li>`).join('')}</ul>`;
+    return;
+  }
+
+  let html = `<div>Kích thước: ${state.rows}x${state.cols} &nbsp;|&nbsp; Start=${cellLabel(result.sPos)} &nbsp; Đích=${cellLabel(result.ePos)}</div><ul>`;
+
+  if (result.firstMoveBad.length) {
+    html += `<li class="fail">Ô cạnh Start có bẫy (${result.firstMoveBad.map(cellLabel).join(', ')}) → nước đi đầu tiên phải đoán mò.</li>`;
+  } else {
+    html += `<li class="ok">Các ô cạnh Start đều an toàn (nước đi đầu không phải đoán).</li>`;
+  }
+
+  if (!result.reachedE) {
+    html += `<li class="fail">KHÔNG thể suy luận tới được đĩa cá — cần đoán mò ở đâu đó trên đường đi.</li>`;
+  } else {
+    html += `<li class="ok">Có thể suy luận tới đĩa cá hoàn toàn bằng logic.</li>`;
+  }
+
+  if (!result.fullySolved) {
+    html += `<li class="warn">Còn ${result.stuckCells.length} ô chưa suy luận được (khoanh vàng nét đứt trên bàn cờ): ${result.stuckCells.map(cellLabel).join(', ')} — không chặn đường thắng, nhưng nếu người chơi đi hướng đó sẽ phải đoán mò.</li>`;
+  } else {
+    html += `<li class="ok">Toàn bộ bàn cờ giải được hết bằng logic, không ô nào phải đoán.</li>`;
+  }
+
+  html += '</ul>';
+  const pass = result.firstMoveBad.length === 0 && result.reachedE;
+  html += `<div class="verdict ${pass ? 'pass' : 'fail'}">${pass ? '✅ ĐẠT' : '❌ KHÔNG ĐẠT'}</div>`;
+  el.innerHTML = html;
+}
+
+document.getElementById('btn-check').addEventListener('click', () => {
+  lastResult = runChecker();
+  showReport(lastResult);
+  render();
+});
+
+// =============================================================================
+// RESIZE
+// =============================================================================
+document.getElementById('btn-resize').addEventListener('click', () => {
+  let newRows = parseInt(document.getElementById('rows-input').value, 10);
+  let newCols = parseInt(document.getElementById('cols-input').value, 10);
+  newRows = Math.min(15, Math.max(3, isNaN(newRows) ? state.rows : newRows));
+  newCols = Math.min(15, Math.max(3, isNaN(newCols) ? state.cols : newCols));
+  document.getElementById('rows-input').value = newRows;
+  document.getElementById('cols-input').value = newCols;
+
+  const newCells = new Array(newRows * newCols).fill(0);
+  for (let r = 0; r < Math.min(state.rows, newRows); r++) {
+    for (let c = 0; c < Math.min(state.cols, newCols); c++) {
+      newCells[r * newCols + c] = state.cells[idx(r, c)];
+    }
+  }
+  state.rows = newRows;
+  state.cols = newCols;
+  state.cells = newCells;
+
+  if (!findSpecial(state.cells, state.rows, state.cols, 2)) state.cells[0] = 2;
+  if (!findSpecial(state.cells, state.rows, state.cols, 3)) state.cells[state.rows * state.cols - 1] = 3;
+
+  lastResult = null;
+  document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
+  render();
+});
+
+// =============================================================================
+// MODE BUTTONS
+// =============================================================================
+const modeLabels = {
+  trap: 'Bấm ô để cắm/gỡ bẫy.',
+  start: 'Bấm 1 ô để đặt làm Xuất Phát (dời khỏi vị trí cũ).',
+  end: 'Bấm 1 ô để đặt làm Đích (dời khỏi vị trí cũ).',
+  erase: 'Bấm ô để xoá về ô trống.',
+};
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
+    document.getElementById('mode-status').textContent = 'Chế độ: ' + modeLabels[state.mode];
+  });
+});
+
+// =============================================================================
+// RESET
+// =============================================================================
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!confirm('Xoá hết và làm lại bàn cờ hiện tại?')) return;
+  state.cells = newGrid(state.rows, state.cols);
+  lastResult = null;
+  document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
+  render();
+});
+
+// =============================================================================
+// EXPORT JSON
+// =============================================================================
+function cellsToRows() {
+  const rows = [];
+  for (let r = 0; r < state.rows; r++) {
+    let line = '';
+    for (let c = 0; c < state.cols; c++) {
+      const t = state.cells[idx(r, c)];
+      line += t === 2 ? 'S' : t === 3 ? 'E' : t === 1 ? '#' : '.';
+    }
+    rows.push(line);
+  }
+  return rows;
+}
+
+function updateJsonOutput() {
+  document.getElementById('json-out').value = JSON.stringify(cellsToRows(), null, 2);
+}
+
+document.getElementById('btn-copy').addEventListener('click', async () => {
+  const ta = document.getElementById('json-out');
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    flashStatus('Đã copy JSON!');
+  } catch (e) {
+    ta.select();
+    document.execCommand('copy');
+    flashStatus('Đã copy JSON (fallback)!');
+  }
+});
+
+function flashStatus(msg) {
+  const status = document.getElementById('mode-status');
+  const old = status.textContent;
+  status.textContent = msg;
+  setTimeout(() => { status.textContent = old; }, 1500);
+}
+
+document.getElementById('btn-download').addEventListener('click', () => {
+  let filename = document.getElementById('filename-input').value.trim() || 'level.json';
+  if (!filename.endsWith('.json')) filename += '.json';
+  const blob = new Blob([JSON.stringify(cellsToRows(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// =============================================================================
+// IMPORT JSON
+// =============================================================================
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data) || !data.every(x => typeof x === 'string')) {
+        throw new Error('File phải là mảng các chuỗi, ví dụ ["S....", "....."]');
+      }
+      const rows = data.length;
+      const cols = data[0].length;
+      for (const row of data) {
+        if (row.length !== cols) throw new Error('Các dòng không đều nhau về độ dài.');
+        for (const ch of row) if (!'SE#.'.includes(ch)) throw new Error(`Ký tự không hợp lệ '${ch}'.`);
+      }
+      const sCount = data.join('').split('').filter(ch => ch === 'S').length;
+      const eCount = data.join('').split('').filter(ch => ch === 'E').length;
+      if (sCount !== 1) throw new Error(`Phải có đúng 1 ô 'S', hiện có ${sCount}.`);
+      if (eCount !== 1) throw new Error(`Phải có đúng 1 ô 'E', hiện có ${eCount}.`);
+
+      const cells = new Array(rows * cols).fill(0);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const ch = data[r][c];
+          cells[r * cols + c] = ch === 'S' ? 2 : ch === 'E' ? 3 : ch === '#' ? 1 : 0;
+        }
+      }
+
+      state.rows = rows;
+      state.cols = cols;
+      state.cells = cells;
+      document.getElementById('rows-input').value = rows;
+      document.getElementById('cols-input').value = cols;
+      document.getElementById('filename-input').value = file.name;
+      lastResult = null;
+      document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
+      render();
+      flashStatus(`Đã nạp ${file.name}`);
+    } catch (err) {
+      alert('Không nạp được file: ' + err.message);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// =============================================================================
+// INIT
+// =============================================================================
+render();
+</script>
+
+</body>
+</html>
