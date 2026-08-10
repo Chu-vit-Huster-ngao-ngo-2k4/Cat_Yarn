@@ -225,6 +225,18 @@
       gap: 24px;
     }
 
+    /* Bàn cờ quá lớn (vd 15x15) để co vừa 1 màn hình mà ô vẫn còn bấm được thoải
+       mái -> chuyển sang cho CUỘN thay vì co nhỏ thêm (xem fitBoardToSpace() +
+       centerCameraOnCat() trong script.js). Đổi hẳn sang align/justify flex-start
+       vì center + overflow:auto dễ bị trình duyệt cắt mất phần tràn ra bên đầu. */
+    #board-area.scrollable {
+      overflow: auto;
+      align-items: flex-start;
+      justify-content: flex-start;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
     .screen-bottom {
       flex-shrink: 0;
       display: flex;
