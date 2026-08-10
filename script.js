@@ -18,14 +18,6 @@ victorySound.preload = 'auto';
 // theo màn hình — chỉ vùng bàn cờ ở giữa mới tự co giãn để vừa khoảng trống còn lại
 // (điện thoại nhỏ vẫn vừa khít, không bị tràn/cắt; layout bên trong bàn cờ vẫn giữ
 // nguyên pixel cố định như cũ, chỉ scale toàn khối bằng transform).
-// Ô nhỏ hơn mức này thì khó bấm trúng/khó đọc số -> thà cho CUỘN bàn cờ còn hơn
-// co tiếp (quan trọng với bàn cờ lớn kiểu 15x15 sau này). Cố tình để 32px (hơi
-// dưới mức khuyến nghị 44-46px) để board 9x9 hiện có vẫn co vừa màn hình y hệt
-// như trước — không tự dưng đổi trải nghiệm của level đã lên rồi. Có thêm màn
-// to hơn mà thấy ô 9x9 hơi khó bấm thì tăng số này lên (44-46) là được.
-const MIN_CELL_PX = 32;
-let currentBoardScale = 1;
-
 function fitBoardToSpace() {
     const boardArea = document.getElementById('board-area');
     const boardOuter = document.getElementById('board-outer');
@@ -39,40 +31,15 @@ function fitBoardToSpace() {
 
     const availW = boardArea.clientWidth - 12;
     const availH = boardArea.clientHeight - 12;
-    let scale = Math.min(1, availW / naturalW, availH / naturalH);
+    const scale = Math.min(1, availW / naturalW, availH / naturalH);
 
-    const minScale = MIN_CELL_PX / CELL_SIZE;
-    const overflowing = scale < minScale;
-    if (overflowing) scale = minScale;
-
-    currentBoardScale = scale;
     board.style.transform = `scale(${scale})`;
     boardOuter.style.width = Math.round(naturalW * scale) + 'px';
     boardOuter.style.height = Math.round(naturalH * scale) + 'px';
-    boardArea.classList.toggle('scrollable', overflowing);
-
-    centerCameraOnCat(true);
 }
 window.addEventListener('resize', fitBoardToSpace);
 window.addEventListener('orientationchange', fitBoardToSpace);
 window.addEventListener('load', fitBoardToSpace);
-
-// "Camera" theo mèo khi bàn cờ lớn hơn màn hình (đã bật cuộn) — cuộn board-area
-// sao cho mèo luôn nằm giữa khung nhìn, khỏi phải tự kéo tìm mèo mỗi bước.
-function centerCameraOnCat(instant) {
-    const boardArea = document.getElementById('board-area');
-    if (!boardArea || !boardArea.classList.contains('scrollable')) return;
-    if (!playerPos) return;
-
-    const catX = (BOARD_PAD + playerPos.c * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2) * currentBoardScale;
-    const catY = (BOARD_PAD + playerPos.r * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2) * currentBoardScale;
-
-    boardArea.scrollTo({
-        left: Math.max(0, catX - boardArea.clientWidth / 2),
-        top: Math.max(0, catY - boardArea.clientHeight / 2),
-        behavior: instant ? 'auto' : 'smooth'
-    });
-}
 function toggleAudio() {
     soundEnabled = !soundEnabled;
     updateSoundToggleUI();
@@ -1292,8 +1259,6 @@ function updateCatPosition(instant) {
         catEl.style.left = x + 'px';
         catEl.style.top = y + 'px';
     }
-
-    centerCameraOnCat(instant);
 }
 
 function triggerSquashAnimation() {
