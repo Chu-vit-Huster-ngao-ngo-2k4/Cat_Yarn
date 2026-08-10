@@ -20,15 +20,27 @@
 
   <div id="app">
 
-    <!-- ===== MÀN HOME ===== -->
-    <div id="screen-home" class="screen">
-      <div class="screen-top">
+    <!-- ===== MÀN LOADING ===== -->
+    <div id="screen-loading" class="screen">
+      <div class="loading-content">
         <div class="header">
-          <h1 id="game-title">CAT'S YARN</h1>
+          <h1>CAT'S YARN</h1>
         </div>
-        <div class="home-top-row">
-          <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
-          <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Đang tải...</p>
+      </div>
+    </div>
+
+    <!-- ===== MÀN HOME ===== -->
+    <div id="screen-home" class="screen" style="display:none;">
+      <div class="screen-top">
+        <div class="home-topbar">
+          <div class="topbar-side topbar-side-left">
+            <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+          </div>
+          <div class="topbar-side topbar-side-right topbar-icons">
+            <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+          </div>
         </div>
       </div>
 
@@ -96,7 +108,7 @@
     <div class="modal-card modal-card-closable">
       <button class="modal-close-btn" onclick="hideSettings()" title="Đóng">×</button>
       <div class="modal-icon"><img class="modal-icon-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></div>
-      <h2 class="modal-title" style="color:#4a3022;">Cài Đặt</h2>
+      <h2 class="modal-title" id="game-settings-title" style="color:#4a3022;">Cài Đặt</h2>
       <div class="settings-row">
         <button class="settings-toggle" id="settings-sound-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
           <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">

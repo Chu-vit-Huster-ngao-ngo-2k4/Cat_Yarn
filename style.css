@@ -139,6 +139,40 @@
       letter-spacing: 1px;
     }
 
+    /* Màn Loading — hiện đầu tiên lúc mở app trong lúc chờ loadLevels() tải xong,
+       rồi mới chuyển qua Home (xem showScreen() trong script.js). */
+    #screen-loading {
+      justify-content: center;
+    }
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 5px solid var(--board-shadow);
+      border-top-color: #2a9d8f;
+      border-radius: 50%;
+      margin-top: 10px;
+      animation: loading-spin 0.8s linear infinite;
+    }
+
+    @keyframes loading-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 14px;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-weight: 600;
+      color: var(--cacao);
+      opacity: 0.7;
+    }
+
     /* Màn Home / màn Chơi — chỉ 1 trong 2 hiện tại 1 thời điểm (JS toggle display),
        chia 3 vùng: trên (điều hướng/điểm số) - giữa (co giãn) - dưới (nút bấm). */
     .screen {
@@ -182,7 +216,10 @@
     }
 
     /* Thanh trên khi đang chơi: mũi tên lùi về Home - tên level - nhóm icon (❓/🔊) */
-    .game-topbar {
+    /* .home-topbar dùng chung layout với .game-topbar để nút Cài Đặt ở màn Home
+       rơi đúng y hệt vị trí (góc trên phải) như nút Cài Đặt trong màn Chơi. */
+    .game-topbar,
+    .home-topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -219,15 +256,6 @@
       padding: 6px 16px;
       font-weight: 700;
       font-size: 1.1rem;
-    }
-
-    /* Hàng ngang chứa huy hiệu xu + nút Cài đặt ở màn Home */
-    .home-top-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 10px;
     }
 
     /* Huy hiệu số xu hiện có — nhún nhẹ mỗi khi cộng thêm xu */

@@ -738,6 +738,7 @@ function playCurrentLevel() {
 }
 
 function showScreen(name) {
+    document.getElementById('screen-loading').style.display = name === 'loading' ? 'flex' : 'none';
     document.getElementById('screen-home').style.display = name === 'home' ? 'flex' : 'none';
     document.getElementById('screen-game').style.display = name === 'game' ? 'flex' : 'none';
     fitBoardToSpace();
@@ -1790,9 +1791,10 @@ function undo() {
 
 // =============================================================================
 // DEV CHEAT MENU — chỉ dành cho lúc phát triển/test, KHÔNG lộ ra với người chơi
-// thường: phải bấm liên tiếp 7 lần vào tiêu đề "CAT'S YARN" ở màn Home trong vòng
-// 1.5s mới mở được (xem attachCheatMenuTrigger()), không có nút/menu nào khác dẫn
-// tới đây. Code vẫn nằm trong bản build bình thường (không cần bước loại trừ khỏi
+// thường: phải mở Settings TRONG LÚC CHƠI (bấm ⚙️ như bình thường) rồi bấm liên
+// tiếp 7 lần vào chữ tiêu đề "Cài Đặt" bên trong modal đó, trong vòng 1.5s, mới
+// mở được (xem attachCheatMenuTrigger()). Settings ở màn Home không có logic
+// này. Code vẫn nằm trong bản build bình thường (không cần bước loại trừ khỏi
 // www/ riêng) vì hoàn toàn im lìm nếu không ai biết thao tác bí mật.
 // =============================================================================
 const CHEAT_TAP_COUNT = 7;
@@ -1802,7 +1804,7 @@ let cheatTapLastTime = 0;
 let cheatShowTraps = false;
 
 function attachCheatMenuTrigger() {
-    const title = document.getElementById('game-title');
+    const title = document.getElementById('game-settings-title');
     if (!title) return;
     title.addEventListener('click', () => {
         const now = Date.now();
@@ -1811,6 +1813,7 @@ function attachCheatMenuTrigger() {
         cheatTapCount++;
         if (cheatTapCount >= CHEAT_TAP_COUNT) {
             cheatTapCount = 0;
+            hideSettings();
             openCheatMenu();
         }
     });
@@ -1921,6 +1924,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
 }
 
 (async () => {
+    showScreen('loading');
     await loadLevels();
     loadCoins();
     loadBoosterCounts();
