@@ -5,9 +5,8 @@ git nên đi theo repo). Sửa/xoá/thêm tuỳ ý — không phải file hệ t
 
 ## Quy tắc làm việc trong repo này
 
-- **Luôn hỏi trước khi `git push`**, kể cả khi trước đó trong cùng phiên đã được
-  đồng ý push rồi — mỗi lần push cần 1 lời đồng ý riêng. Commit ở local thì làm
-  bình thường không cần hỏi.
+- **Chỉ commit ở local, không tự push.** Người dùng tự push lấy — không cần hỏi
+  xin push, và cũng đừng chủ động push dù được hỏi kiểu chung chung.
 - **Commit message viết bằng tiếng Việt**, và **không** thêm dòng
   `Co-Authored-By: Claude ...` hay bất kỳ ghi chú tác giả nào là Claude.
 - Sau khi sửa file gốc (`Color_Flow_2.0_fixed.html`, `script.js`, `ads.js`,
