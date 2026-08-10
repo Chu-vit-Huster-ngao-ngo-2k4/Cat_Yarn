@@ -14,36 +14,6 @@ function initAudio() {
 const victorySound = new Audio('sfx/victory.mp3');
 victorySound.preload = 'auto';
 
-// Thêm bộ nhận diện Thao tác Vuốt (Swipe) trên Mobile.
-// Ngưỡng để cao (50px) vì tap-vào-ô là cách di chuyển chính trên mobile — vuốt chỉ
-// là lối tắt phụ, ngưỡng thấp dễ khiến 1 cái tap hơi run tay bị hiểu nhầm thành vuốt.
-const SWIPE_THRESHOLD = 50;
-let touchStartX = 0, touchStartY = 0;
-
-document.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-}, false);
-
-document.addEventListener('touchend', e => {
-    if (!playerPos || isWalking) return; // đang ở màn Home, hoặc mèo đang tự chạy tới ô xa
-    let diffX = e.changedTouches[0].screenX - touchStartX;
-    let diffY = e.changedTouches[0].screenY - touchStartY;
-    let { r, c } = playerPos;
-
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-        if (Math.abs(diffX) > SWIPE_THRESHOLD) {
-            if (diffX > 0) handleMoveInput(r, c + 1); // Vuốt Phải
-            else handleMoveInput(r, c - 1);           // Vuốt Trái
-        }
-    } else {
-        if (Math.abs(diffY) > SWIPE_THRESHOLD) {
-            if (diffY > 0) handleMoveInput(r + 1, c); // Vuốt Xuống
-            else handleMoveInput(r - 1, c);           // Vuốt Lên
-        }
-    }
-}, false);
-
 // UI trên/dưới (top bar, status, nút bấm) giữ nguyên kích thước thật, không co giãn
 // theo màn hình — chỉ vùng bàn cờ ở giữa mới tự co giãn để vừa khoảng trống còn lại
 // (điện thoại nhỏ vẫn vừa khít, không bị tràn/cắt; layout bên trong bàn cờ vẫn giữ
@@ -1409,7 +1379,7 @@ function walkPath(path, idx, myGeneration) {
         handleMoveInput(r, c);
     } catch (e) {
         // Lỡ có lỗi bất ngờ giữa đường vẫn PHẢI mở khoá lại input, không thì mọi thao
-        // tác (tap/vuốt/phím/Undo/Hint) sẽ bị treo im re mãi vì isWalking kẹt ở true.
+        // tác (tap/phím/Undo/Hint) sẽ bị treo im re mãi vì isWalking kẹt ở true.
         isWalking = false;
         throw e;
     }
