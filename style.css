@@ -693,6 +693,11 @@
       z-index: 2;
     }
 
+    /* Đốm màu 2 (ô 'D') — ô giấu màu thứ 2 khi màn dùng cơ chế ĐỦ 2 màu. */
+    .color-badge.color-badge-2 {
+      background: #1982c4;
+    }
+
     /* Số đếm bẫy lân cận, tô màu kiểu Minesweeper cổ điển - hiển thị to, giữa ô. */
     .num-badge {
       font-size: 1.6rem;
@@ -727,6 +732,21 @@
       box-shadow: 0 5px 0 #d89f10 !important;
     }
 
+    /* Màn chỉ giấu đúng 1 đốm màu 2 ('D', không có 'C') — hiếm khi xảy ra (thường
+       đi kèm 'C') nhưng vẫn tô đúng màu 2 thay vì mặc định vàng, tránh lệch màu
+       với đốm đã giấu. */
+    .cell.color-cell-tinted-2 {
+      background-color: #1982c4 !important;
+      box-shadow: 0 5px 0 #125e8f !important;
+    }
+
+    /* Màn có ĐỦ 2 màu -> ô cá tách nửa nền (trái vàng/phải xanh), khớp mèo tách
+       nửa thân khi tìm đủ (xem .cat-split-colored). */
+    .cell.color-cell-split {
+      background: linear-gradient(to right, #ffca3a 50%, #1982c4 50%) !important;
+      box-shadow: 0 5px 0 #8f6f28 !important;
+    }
+
     /* Viền sáng nhấp nháy nhẹ BÊN TRONG ô cá cho thật nổi bật, khác hẳn ô bình
        thường — dùng ::after RIÊNG (không phải box-shadow trên .cell) vì
        .color-cell-tinted ở trên đã set box-shadow !important, animate trực tiếp
@@ -734,7 +754,9 @@
        trước đây). Nằm TRONG viền ô (inset dương) vì .cell có overflow:hidden, phần
        nào tràn ra ngoài sẽ bị cắt mất không thấy được.
     */
-    .cell.color-cell-tinted::after {
+    .cell.color-cell-tinted::after,
+    .cell.color-cell-tinted-2::after,
+    .cell.color-cell-split::after {
       content: '';
       position: absolute;
       inset: 3px;
@@ -773,6 +795,31 @@
        thấy màu tìm được khớp màu cá, hiểu ngay "nhuộm đúng màu cá". */
     .cat-player.cat-colored .cat-body {
       fill: #ffca3a;
+    }
+
+    /* Màn có ĐỦ 2 màu -> mèo nhuộm NỬA THÂN mỗi màu thay vì toàn thân — dùng
+       gradient tách đôi định nghĩa sẵn trong <defs> của SVG (xem updateCatPosition()
+       trong script.js). Mặc định cả 2 dừng màu (stop) đều trắng (khớp màu gốc,
+       "chưa tìm thấy gì" thì nhìn y hệt mèo bình thường); tìm được nửa nào thì đổi
+       đúng stop-color nửa đó qua class .cat-found-color1/2 bên dưới. */
+    .cat-player.cat-split-colored .cat-body {
+      fill: url(#cat-color-gradient);
+    }
+
+    .cat-gradient-stop-1 {
+      stop-color: #ffffff;
+    }
+
+    .cat-gradient-stop-2 {
+      stop-color: #ffffff;
+    }
+
+    .cat-player.cat-found-color1 .cat-gradient-stop-1 {
+      stop-color: #ffca3a;
+    }
+
+    .cat-player.cat-found-color2 .cat-gradient-stop-2 {
+      stop-color: #1982c4;
     }
 
     /* Biểu cảm mèo theo trạng thái: mặc định "normal", đổi bằng class trên .cat-player.

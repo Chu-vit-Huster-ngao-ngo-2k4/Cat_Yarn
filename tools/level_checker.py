@@ -11,9 +11,11 @@ Mo phong DUNG theo thuat toan trong script.js:
   - luat "o ke Start luon an toan" (khong can doan o nuoc di dau tien)
 
 Dinh dang o: S = xuat phat, E = dia ca, # = bay, . = o thuong,
-C = o giau dom mau (co che "tim mau cho meo", toi da 1 o/man). Ve mat solver, C
-duoc coi la o thuong binh thuong (khong bay) - KHONG kiem tra co suy luan toi
-duoc hay khong, vi day la co che dat ngau nhien tren bat ky o khong phai bay nao.
+C = o giau dom mau 1, D = o giau dom mau 2 (co che "tim mau cho meo", toi da 1
+o C + 1 o D moi man — man chi co C: meo nhuom TOAN THAN; man co du ca C lan D:
+meo nhuom NUA THAN moi mau). Ve mat solver, C/D deu la o thuong binh thuong
+(khong bay) - KHONG kiem tra co suy luan toi duoc hay khong, vi day la co che
+dat ngau nhien tren bat ky o khong phai bay nao.
 
 Cach dung:
   python tools/level_checker.py levels/level01.json      # kiem 1 file JSON co san
@@ -26,7 +28,7 @@ import os
 import json
 import argparse
 
-ALLOWED_CHARS = set('SE#.C')
+ALLOWED_CHARS = set('SE#.CD')
 DIRS_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 DIRS_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
@@ -48,18 +50,21 @@ def parse_rows(rows):
                 f"dong {i + 1} dai {len(row)}. Luoi phai la hinh chu nhat.")
         for ch in row:
             if ch not in ALLOWED_CHARS:
-                raise LevelError(f"Ky tu khong hop le '{ch}' o dong {i + 1}. Chi cho phep S, E, #, C, .")
+                raise LevelError(f"Ky tu khong hop le '{ch}' o dong {i + 1}. Chi cho phep S, E, #, C, D, .")
 
     rows_count = len(rows)
     s_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'S']
     e_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'E']
     c_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'C']
+    d_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'D']
     if len(s_positions) != 1:
         raise LevelError(f"Phai co dung 1 o 'S' (xuat phat), hien co {len(s_positions)}.")
     if len(e_positions) != 1:
         raise LevelError(f"Phai co dung 1 o 'E' (dia ca), hien co {len(e_positions)}.")
     if len(c_positions) > 1:
-        raise LevelError(f"Toi da 1 o 'C' (giau mau), hien co {len(c_positions)}.")
+        raise LevelError(f"Toi da 1 o 'C' (giau mau 1), hien co {len(c_positions)}.")
+    if len(d_positions) > 1:
+        raise LevelError(f"Toi da 1 o 'D' (giau mau 2), hien co {len(d_positions)}.")
 
     return rows_count, width, s_positions[0], e_positions[0]
 

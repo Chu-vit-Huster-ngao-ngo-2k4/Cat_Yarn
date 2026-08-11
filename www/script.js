@@ -449,8 +449,18 @@ let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắ
 let pendingBubbleLoad = false; // true khi đang bung TOÀN BỘ Ô lúc mới vào màn (kể cả ô ẩn)
 let levelGeneration = 0; // tăng mỗi lần loadLevel() chạy — dùng để huỷ hiệu ứng/popup thắng dở dang nếu lỡ Replay giữa lúc đang ăn mừng
 let usedReviveThisLevel = false; // mỗi lượt chơi 1 màn chỉ được hồi sinh 1 lần (xu hoặc xem QC)
-let foundColor = false; // đã tìm thấy đốm màu giấu trong màn chưa — chưa có thì không được ăn cá
-let levelHasColor = false; // màn này có cơ chế giấu màu không (gán trong loadLevel())
+// Cơ chế "tìm màu cho mèo" — tối đa 2 đốm màu độc lập mỗi màn ('C' = màu 1,
+// 'D' = màu 2). Màn chỉ có 'C' -> giữ nguyên hành vi cũ (nhuộm TOÀN THÂN mèo,
+// tương thích ngược với level đã có). Màn có ĐỦ CẢ 'C' và 'D' -> mèo nhuộm NỬA
+// THÂN mỗi màu, khớp màu tương ứng bên ô cá (xem checkColorPickup()/render()).
+let foundColor1 = false;
+let foundColor2 = false;
+let levelNeedsColor1 = false; // màn có ô 'C' không (gán trong loadLevel())
+let levelNeedsColor2 = false; // màn có ô 'D' không (gán trong loadLevel())
+
+function allColorsFound() {
+    return (!levelNeedsColor1 || foundColor1) && (!levelNeedsColor2 || foundColor2);
+}
 
 // =============================================================================
 // XU (economy) — nhận xu mỗi khi qua màn, lưu lại qua localStorage.
@@ -874,7 +884,7 @@ function loadLevel(idx) {
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
     isWalking = false; // đề phòng lỡ đang tự chạy dở dang từ màn trước, không để input bị kẹt khoá
     clearHint(); // vòng gợi ý (nếu có) thuộc về ván trước, không còn ý nghĩa ở màn mới
-    if (catEl) catEl.classList.remove('expr-happy', 'expr-dizzy', 'cat-colored');
+    if (catEl) catEl.classList.remove('expr-happy', 'expr-dizzy', 'cat-colored', 'cat-split-colored', 'cat-found-color1', 'cat-found-color2');
     currentLevelIdx = idx;
     const rows = LEVELS[currentLevelIdx];
     GRID_ROWS = rows.length;
@@ -889,14 +899,16 @@ function loadLevel(idx) {
             if (ch === 'S') type = 'S';
             else if (ch === 'E') type = 'E';
             else if (ch === '#') type = 'B';
-            // 'C' = ô giấu màu (cơ chế "tìm màu cho mèo") — vẫn là ô thường (N), chỉ
-            // thêm cờ hasColor, không đổi cách tính số bẫy lân cận.
+            // 'C'/'D' = ô giấu màu 1/màu 2 (cơ chế "tìm màu cho mèo") — vẫn là ô
+            // thường (N), chỉ thêm cờ, không đổi cách tính số bẫy lân cận.
             const hasColor = (ch === 'C');
-            grid[r].push({ type, count: 0, revealed: false, flagged: false, hasColor });
+            const hasColor2 = (ch === 'D');
+            grid[r].push({ type, count: 0, revealed: false, flagged: false, hasColor, hasColor2 });
             if (type === 'S') playerPos = { r, c };
         }
     }
-    foundColor = false;
+    foundColor1 = false;
+    foundColor2 = false;
 
     // Tính số bẫy lân cận (8 hướng) cho từng ô, kiểu Minesweeper
     for (let r = 0; r < GRID_ROWS; r++) {
@@ -932,10 +944,14 @@ function loadLevel(idx) {
     document.getElementById('level-title').innerText = `Level ${currentLevelIdx + 1}`;
     // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
     // đỡ để người chơi tự dò tới tận ô cá mới biết cần tìm gì.
-    levelHasColor = grid.some(row => row.some(cell => cell.hasColor));
-    updateStatus(levelHasColor
-        ? '🎨 Cá đang chờ đúng màu đó! Tìm đốm màu giống màu cá rồi hẵng tới ăn nhé!'
-        : 'Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
+    levelNeedsColor1 = grid.some(row => row.some(cell => cell.hasColor));
+    levelNeedsColor2 = grid.some(row => row.some(cell => cell.hasColor2));
+    updateStatus(
+        (levelNeedsColor1 && levelNeedsColor2)
+            ? '🎨 Cá cần ĐỦ 2 màu đó! Tìm 2 đốm màu giống 2 nửa màu cá rồi hẵng tới ăn nhé!'
+            : (levelNeedsColor1 || levelNeedsColor2)
+                ? '🎨 Cá đang chờ đúng màu đó! Tìm đốm màu giống màu cá rồi hẵng tới ăn nhé!'
+                : 'Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
     hideResultModal();
 
     // Hiệu ứng "bubble": tất cả các ô bung ra lần lượt theo thứ tự khi vừa vào màn, cho
@@ -1060,7 +1076,7 @@ document.getElementById('tutorial-modal').addEventListener('click', (e) => {
 const COLOR_TUTORIAL_SEEN_KEY = 'catYarnColorTutorialSeen';
 
 function maybeShowColorTutorial() {
-    if (!levelHasColor) return;
+    if (!levelNeedsColor1 && !levelNeedsColor2) return;
     let hasSeen = false;
     try { hasSeen = localStorage.getItem(COLOR_TUTORIAL_SEEN_KEY) === '1'; } catch (e) { /* bỏ qua */ }
     if (hasSeen) return;
@@ -1284,7 +1300,11 @@ function render(instant) {
                 el.classList.add('revealed-safe');
                 // Màn có cơ chế tìm màu -> ô cá LUÔN có sẵn màu cần tìm ngay từ đầu màn
                 // (không đợi tìm thấy mới đổi) — để người chơi biết ngay cần tìm màu gì.
-                if (levelHasColor) el.classList.add('color-cell-tinted');
+                // Đủ cả 2 màu -> tách nửa ô (khớp mèo tách nửa thân); chỉ 1 màu -> tô
+                // nguyên ô như cũ (tương thích ngược với level chỉ có 'C').
+                if (levelNeedsColor1 && levelNeedsColor2) el.classList.add('color-cell-split');
+                else if (levelNeedsColor1) el.classList.add('color-cell-tinted');
+                else if (levelNeedsColor2) el.classList.add('color-cell-tinted-2');
                 contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
             } else {
                 el.classList.add('revealed-safe');
@@ -1301,12 +1321,12 @@ function render(instant) {
             el.appendChild(inner);
 
             // Đốm màu giấu trong ô (nếu có) -> hiện chấm tròn nhỏ ở góc khi ô đã mở,
-            // ĐÚNG màu ô cá, để người chơi liên tưởng ngay "màu này khớp màu cá cần".
-            // Gắn trực tiếp vào .cell (không phải .cell-inner) để không dính lỗi
-            // stacking-context khi .cell-inner có transform riêng.
-            if (cell.revealed && cell.hasColor) {
+            // ĐÚNG màu tương ứng bên ô cá, để người chơi liên tưởng ngay "màu này khớp
+            // màu cá cần". Gắn trực tiếp vào .cell (không phải .cell-inner) để không
+            // dính lỗi stacking-context khi .cell-inner có transform riêng.
+            if (cell.revealed && (cell.hasColor || cell.hasColor2)) {
                 const colorBadge = document.createElement('span');
-                colorBadge.className = 'color-badge';
+                colorBadge.className = cell.hasColor2 ? 'color-badge color-badge-2' : 'color-badge';
                 el.appendChild(colorBadge);
             }
 
@@ -1357,6 +1377,17 @@ function updateCatPosition(instant) {
         // mèo hơn, không đụng tới phần fill sẽ đổi màu.
         catEl.innerHTML = `
             <svg viewBox="0 0 100 100" style="width:100%; height:100%; filter: drop-shadow(0 4px 0 #4a3022);">
+                <defs>
+                    <!-- Gradient tách nửa thân dùng cho cơ chế "tìm ĐỦ 2 màu" (.cat-split-colored)
+                         — gradientUnits="userSpaceOnUse" + toạ độ theo đúng viewBox (0-100) để mốc
+                         tách luôn nằm giữa CON MÈO (x=50), không lệch theo từng hình con (tai/thân/
+                         chân) như mặc định "objectBoundingBox" sẽ làm. Màu lấy qua CSS custom
+                         property, mặc định trắng (khớp màu gốc), đổi màu khi .cat-found-color1/2. -->
+                    <linearGradient id="cat-color-gradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+                        <stop offset="50%" class="cat-gradient-stop-1"/>
+                        <stop offset="50%" class="cat-gradient-stop-2"/>
+                    </linearGradient>
+                </defs>
                 <path class="cat-body" d="M 20 30 L 10 5 L 42 18 Z" fill="#ffffff" stroke="#4a3022" stroke-width="7" stroke-linejoin="round"/>
                 <path class="cat-body" d="M 80 30 L 90 5 L 58 18 Z" fill="#ffffff" stroke="#4a3022" stroke-width="7" stroke-linejoin="round"/>
                 <rect class="cat-body" x="12" y="18" width="76" height="72" rx="24" fill="#ffffff" stroke="#4a3022" stroke-width="7"/>
@@ -1660,8 +1691,8 @@ function handleMoveInput(targetR, targetC) {
         return;
     }
 
-    if (targetCell.type === 'E' && levelHasColor && !foundColor) {
-        updateStatus('🎨 Mèo cần tìm màu trước khi ăn cá!', '#ff5964');
+    if (targetCell.type === 'E' && !allColorsFound()) {
+        updateStatus('🎨 Mèo cần tìm đủ màu trước khi ăn cá!', '#ff5964');
         return;
     }
 
@@ -1705,15 +1736,39 @@ function handleMoveInput(targetR, targetC) {
     }
 }
 
-// Cơ chế "tìm màu cho mèo": 1 ô an toàn trong màn giấu sẵn màu (cell.hasColor),
-// hiện ra ngay khi ô đó được mở (dù mở trực tiếp hay bị loang trúng) — không cần
-// đoán mò thêm. Chưa tìm thấy màu thì chưa được bước vào ô cá (xem handleMoveInput).
+// Cơ chế "tìm màu cho mèo": 1-2 ô an toàn trong màn giấu sẵn màu (cell.hasColor /
+// cell.hasColor2), hiện ra ngay khi ô đó được mở (dù mở trực tiếp hay bị loang
+// trúng) — không cần đoán mò thêm. Chưa tìm đủ màu cần thì chưa được bước vào ô
+// cá (xem handleMoveInput). Màn chỉ có 1 màu -> mèo nhuộm TOÀN THÂN (như cũ);
+// màn có ĐỦ 2 màu -> mèo nhuộm NỬA THÂN mỗi màu (xem onColorFound()).
 function checkColorPickup(r, c, cell) {
-    if (!cell.hasColor || foundColor) return;
-    foundColor = true;
+    if (cell.hasColor && !foundColor1) {
+        foundColor1 = true;
+        onColorFound(r, c, 1);
+    }
+    if (cell.hasColor2 && !foundColor2) {
+        foundColor2 = true;
+        onColorFound(r, c, 2);
+    }
+}
+
+function onColorFound(r, c, which) {
     playSound('color');
-    updateStatus('🎨 Mèo tìm thấy màu rồi! Giờ ăn được cá!', '#8ac926');
-    if (catEl) catEl.classList.add('cat-colored');
+    const dual = levelNeedsColor1 && levelNeedsColor2;
+    if (catEl) {
+        if (dual) {
+            catEl.classList.add('cat-split-colored', which === 1 ? 'cat-found-color1' : 'cat-found-color2');
+        } else {
+            catEl.classList.add('cat-colored');
+        }
+    }
+    updateStatus(
+        dual
+            ? (allColorsFound()
+                ? '🎨 Mèo tìm đủ 2 màu rồi! Giờ ăn được cá!'
+                : '🎨 Mèo tìm được 1 nửa màu rồi! Còn nửa kia nữa mới ăn được cá!')
+            : '🎨 Mèo tìm thấy màu rồi! Giờ ăn được cá!',
+        '#8ac926');
     const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
     if (cellEl) {
         const rect = cellEl.getBoundingClientRect();
