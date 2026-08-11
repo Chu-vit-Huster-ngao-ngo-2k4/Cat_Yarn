@@ -24,3 +24,7 @@ android/app/src/main/assets/public/
 Thumbs.db
 *.iml
 .idea/
+
+# Python (chạy tools/*.py tạo ra, không cần track)
+__pycache__/
+*.pyc

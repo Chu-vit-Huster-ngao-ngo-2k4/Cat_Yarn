@@ -86,6 +86,7 @@
   .action-btn.check { background: var(--teal); }
   .action-btn.reset { background: var(--red); }
   .action-btn.resize { background: var(--blue); }
+  .action-btn.generate { background: var(--yellow); color: #2a1d0a; }
   .action-btn.copy { background: var(--btn-neutral); }
   .action-btn.download { background: var(--green); color: #1c2a08; }
 
@@ -187,6 +188,16 @@
           <input type="number" id="cols-input" min="3" max="15" value="5">
         </div>
         <button class="action-btn resize full" id="btn-resize">↔️ Áp dụng kích thước</button>
+      </div>
+
+      <div class="panel">
+        <h2>Sinh bẫy ngẫu nhiên</h2>
+        <div class="size-row">
+          <label for="bomb-count-input">Số bẫy</label>
+          <input type="number" id="bomb-count-input" min="1" value="6">
+        </div>
+        <button class="action-btn generate full" id="btn-generate">🎲 Sinh Bẫy (Đảm Bảo Giải Được)</button>
+        <div class="status-line" id="generate-status">Random tới khi ra bố cục giải được bằng logic thuần, không cần tự đoán quy luật.</div>
       </div>
 
       <div class="panel">
@@ -308,7 +319,12 @@ function computeCounts(cells, rows, cols) {
 }
 
 function runChecker() {
-  const { rows, cols, cells } = state;
+  return checkSolvable(state.cells, state.rows, state.cols);
+}
+
+// Tach rieng khoi runChecker() de dung lai duoc cho ca generateSolvableCells()
+// (thu random nhieu bo cuc, cham tung bo cuc bang chinh ham nay).
+function checkSolvable(cells, rows, cols) {
   const counts = computeCounts(cells, rows, cols);
   const sPos = findSpecial(cells, rows, cols, 2);
   const ePos = findSpecial(cells, rows, cols, 3);
@@ -369,29 +385,63 @@ function runChecker() {
 
   let reachedE = eReachable();
 
+  // Gom moi "dau moi" hien co (1 o so da mo, con o lan can chua biet) — dung chung
+  // cho Luat A/B (tu no) lan Luat C (so sanh cap).
+  function collectConstraints(deducedMine, deducedSafe) {
+    const constraints = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!revealed[idx2(r, c, cols)] || !isPlain(cells[idx2(r, c, cols)])) continue;
+        const hidden = [];
+        for (const [dr, dc] of DIRS8) {
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+          if (!revealed[idx2(nr, nc, cols)]) hidden.push(key(nr, nc));
+        }
+        if (!hidden.length) continue;
+        const cnt = counts[idx2(r, c, cols)];
+        const knownMines = hidden.filter(k => deducedMine.has(k));
+        const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
+        if (!unknown.length) continue;
+        constraints.push({ unknown: new Set(unknown), remaining: cnt - knownMines.length });
+      }
+    }
+    return constraints;
+  }
+
+  // Luat A/B (1 dau moi tu no) + Luat C (so sanh 2 dau moi CHONG LAN — pattern
+  // "1-2" kinh dien: neu vung chua-biet cua A la tap CON cua B, phan chenh lech
+  // B-tru-A phai chua dung remaining_B - remaining_A bay) — khop 1:1 voi
+  // deduceAll() trong script.js va deduce() trong tools/level_checker.py.
   function deduceOnce() {
     const deducedSafe = new Set(), deducedMine = new Set();
     let changed = true;
     while (changed) {
       changed = false;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (!revealed[idx2(r, c, cols)] || !isPlain(cells[idx2(r, c, cols)])) continue;
-          const hidden = [];
-          for (const [dr, dc] of DIRS8) {
-            const nr = r + dr, nc = c + dc;
-            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-            if (!revealed[idx2(nr, nc, cols)]) hidden.push(key(nr, nc));
-          }
-          if (!hidden.length) continue;
-          const cnt = counts[idx2(r, c, cols)];
-          const knownMines = hidden.filter(k => deducedMine.has(k));
-          const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
-          const remaining = cnt - knownMines.length;
-          if (remaining === 0 && unknown.length) {
-            unknown.forEach(k => { if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; } });
-          } else if (remaining === unknown.length && unknown.length) {
-            unknown.forEach(k => { if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; } });
+      const constraints = collectConstraints(deducedMine, deducedSafe);
+
+      for (const con of constraints) {
+        if (con.remaining === 0 && con.unknown.size > 0) {
+          con.unknown.forEach(k => { if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; } });
+        } else if (con.remaining === con.unknown.size && con.unknown.size > 0) {
+          con.unknown.forEach(k => { if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; } });
+        }
+      }
+
+      for (let i = 0; i < constraints.length; i++) {
+        for (let j = 0; j < constraints.length; j++) {
+          if (i === j) continue;
+          const A = constraints[i], B = constraints[j];
+          if (A.unknown.size === 0 || A.unknown.size >= B.unknown.size) continue;
+          let isSubset = true;
+          for (const k of A.unknown) if (!B.unknown.has(k)) { isSubset = false; break; }
+          if (!isSubset) continue;
+          const diffCells = [...B.unknown].filter(k => !A.unknown.has(k));
+          const diffCount = B.remaining - A.remaining;
+          if (diffCount === 0 && diffCells.length > 0) {
+            diffCells.forEach(k => { if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; } });
+          } else if (diffCount === diffCells.length && diffCells.length > 0) {
+            diffCells.forEach(k => { if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; } });
           }
         }
       }
@@ -425,6 +475,47 @@ function runChecker() {
     sPos, ePos, cPos, colorStuck, counts, firstMoveBad, reachedE,
     fullySolved: stuckCells.length === 0, stuckCells,
   };
+}
+
+// =============================================================================
+// SINH BAY NGAU NHIEN — thay vi doan/rai tay roi cham tung lan, cu random 1 bo
+// cuc bay, cham ngay bang checkSolvable(); khong dat thi thu bo cuc khac, lap
+// lai toi khi ra 1 ban DAT (hoac het luot thu). O mau (C) va giu nguyen tay dat,
+// khong tinh vao day (dung nhu da noi: C khong can kiem tra logic).
+// =============================================================================
+const GENERATE_MAX_ATTEMPTS = 4000;
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateSolvableCells(rows, cols, bombCount) {
+  const total = rows * cols;
+  const sIdx = 0;
+  const eIdx = total - 1;
+  const candidateBase = [];
+  for (let i = 0; i < total; i++) {
+    if (i !== sIdx && i !== eIdx) candidateBase.push(i);
+  }
+  bombCount = Math.max(0, Math.min(bombCount, candidateBase.length));
+
+  for (let attempt = 1; attempt <= GENERATE_MAX_ATTEMPTS; attempt++) {
+    const cells = new Array(total).fill(0);
+    cells[sIdx] = 2;
+    cells[eIdx] = 3;
+    const shuffled = shuffleArray(candidateBase.slice());
+    for (let i = 0; i < bombCount; i++) cells[shuffled[i]] = 1;
+
+    const result = checkSolvable(cells, rows, cols);
+    if (result.firstMoveBad.length === 0 && result.reachedE) {
+      return { cells, attempts: attempt };
+    }
+  }
+  return null;
 }
 
 // =============================================================================
@@ -584,7 +675,49 @@ document.getElementById('btn-resize').addEventListener('click', () => {
 
   lastResult = null;
   document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
+  document.getElementById('bomb-count-input').value = suggestBombCount(state.rows, state.cols);
   render();
+});
+
+// =============================================================================
+// SINH BAY NGAU NHIEN (UI)
+// =============================================================================
+function suggestBombCount(rows, cols) {
+  // ~22% so o (tru S/E) — mat do quen thuoc cua cac level co san trong levels/.
+  return Math.max(1, Math.round(rows * cols * 0.22));
+}
+
+document.getElementById('btn-generate').addEventListener('click', () => {
+  const btn = document.getElementById('btn-generate');
+  const status = document.getElementById('generate-status');
+  let bombCount = parseInt(document.getElementById('bomb-count-input').value, 10);
+  if (isNaN(bombCount) || bombCount < 1) bombCount = suggestBombCount(state.rows, state.cols);
+  document.getElementById('bomb-count-input').value = bombCount;
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Đang thử...';
+
+  // Tach 1 nhip nho de trinh duyet kip ve "Dang thu..." truoc khi vong lap dong bo chay.
+  setTimeout(() => {
+    // Sinh bay moi -> bo het C cu (khong con nam tren "o thuong" chac chan an toan
+    // theo dung bo cuc bay moi), giu nguyen vi tri S/E nguoi dung da chinh (goc mac
+    // dinh neu chua doi).
+    const result = generateSolvableCells(state.rows, state.cols, bombCount);
+    btn.disabled = false;
+    btn.textContent = originalText;
+
+    if (!result) {
+      status.textContent = `Thử ${GENERATE_MAX_ATTEMPTS} lần vẫn chưa ra bố cục giải được với ${bombCount} bẫy — thử giảm số bẫy rồi bấm lại.`;
+      return;
+    }
+
+    state.cells = result.cells;
+    lastResult = checkSolvable(state.cells, state.rows, state.cols);
+    showReport(lastResult);
+    render();
+    status.textContent = `✅ Đã sinh xong sau ${result.attempts} lần thử — nhớ đặt lại ô Màu (C) nếu cần, sinh bẫy mới sẽ xoá ô Màu cũ.`;
+  }, 10);
 });
 
 // =============================================================================

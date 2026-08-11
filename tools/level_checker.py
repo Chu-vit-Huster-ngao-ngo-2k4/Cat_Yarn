@@ -10,7 +10,10 @@ Mo phong DUNG theo thuat toan trong script.js:
   - suy luan deducedSafe / deducedMine (findHintCell())
   - luat "o ke Start luon an toan" (khong can doan o nuoc di dau tien)
 
-Dinh dang o: S = xuat phat, E = dia ca, # = bay, . = o thuong.
+Dinh dang o: S = xuat phat, E = dia ca, # = bay, . = o thuong,
+C = o giau dom mau (co che "tim mau cho meo", toi da 1 o/man). Ve mat solver, C
+duoc coi la o thuong binh thuong (khong bay) - KHONG kiem tra co suy luan toi
+duoc hay khong, vi day la co che dat ngau nhien tren bat ky o khong phai bay nao.
 
 Cach dung:
   python tools/level_checker.py levels/level01.json      # kiem 1 file JSON co san
@@ -23,7 +26,7 @@ import os
 import json
 import argparse
 
-ALLOWED_CHARS = set('SE#.')
+ALLOWED_CHARS = set('SE#.C')
 DIRS_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 DIRS_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
@@ -45,15 +48,18 @@ def parse_rows(rows):
                 f"dong {i + 1} dai {len(row)}. Luoi phai la hinh chu nhat.")
         for ch in row:
             if ch not in ALLOWED_CHARS:
-                raise LevelError(f"Ky tu khong hop le '{ch}' o dong {i + 1}. Chi cho phep S, E, #, .")
+                raise LevelError(f"Ky tu khong hop le '{ch}' o dong {i + 1}. Chi cho phep S, E, #, C, .")
 
     rows_count = len(rows)
     s_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'S']
     e_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'E']
+    c_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'C']
     if len(s_positions) != 1:
         raise LevelError(f"Phai co dung 1 o 'S' (xuat phat), hien co {len(s_positions)}.")
     if len(e_positions) != 1:
         raise LevelError(f"Phai co dung 1 o 'E' (dia ca), hien co {len(e_positions)}.")
+    if len(c_positions) > 1:
+        raise LevelError(f"Toi da 1 o 'C' (giau mau), hien co {len(c_positions)}.")
 
     return rows_count, width, s_positions[0], e_positions[0]
 
@@ -100,35 +106,75 @@ def flood_reveal(grid, rows_count, width, revealed, r, c):
                 queue.append((nr, nc))
 
 
+def collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe):
+    """Gom moi 'dau moi' hien co: {unknown: set toa do, remaining: so bay con lai}."""
+    constraints = []
+    for r in range(rows_count):
+        for c in range(width):
+            cell = grid[r][c]
+            if not revealed[r][c] or cell['type'] != 'N':
+                continue
+            hidden = []
+            for dr, dc in DIRS_8:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < rows_count and 0 <= nc < width and not revealed[nr][nc]:
+                    hidden.append((nr, nc))
+            if not hidden:
+                continue
+            known_mines = [k for k in hidden if k in deduced_mine]
+            unknown = {k for k in hidden if k not in deduced_mine and k not in deduced_safe}
+            if not unknown:
+                continue
+            constraints.append({'unknown': unknown, 'remaining': cell['count'] - len(known_mines)})
+    return constraints
+
+
 def deduce(grid, rows_count, width, revealed):
-    """Y het findHintCell() trong script.js: constraint propagation cong don."""
+    """
+    Y het findHintCell() trong script.js: constraint propagation cong don, gom 3 luat:
+      Luat A/B (1 dau moi, tu no): het bay can tim -> con lai AN TOAN; so o chua biet
+        dung bang so bay con lai -> con lai la BAY.
+      Luat C (so sanh 2 dau moi CHONG LAN - pattern "1-2" kinh dien cua Minesweeper):
+        neu vung o-chua-biet cua dau moi A la tap CON cua dau moi B, phan CHENH LECH
+        (B tru A) phai chua dung (remaining_B - remaining_A) bay.
+    """
     deduced_safe = set()
     deduced_mine = set()
     changed = True
     while changed:
         changed = False
-        for r in range(rows_count):
-            for c in range(width):
-                cell = grid[r][c]
-                if not revealed[r][c] or cell['type'] != 'N':
+        constraints = collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe)
+
+        # Luat A/B - tung dau moi tu no.
+        for con in constraints:
+            unknown, remaining = con['unknown'], con['remaining']
+            if remaining == 0 and unknown:
+                for k in unknown:
+                    if k not in deduced_safe:
+                        deduced_safe.add(k)
+                        changed = True
+            elif remaining == len(unknown) and unknown:
+                for k in unknown:
+                    if k not in deduced_mine:
+                        deduced_mine.add(k)
+                        changed = True
+
+        # Luat C - so sanh tung cap dau moi, tim quan he tap con.
+        for a in constraints:
+            for b in constraints:
+                if a is b or not a['unknown'] or len(a['unknown']) >= len(b['unknown']):
                     continue
-                hidden = []
-                for dr, dc in DIRS_8:
-                    nr, nc = r + dr, c + dc
-                    if 0 <= nr < rows_count and 0 <= nc < width and not revealed[nr][nc]:
-                        hidden.append((nr, nc))
-                if not hidden:
+                if not a['unknown'].issubset(b['unknown']):
                     continue
-                known_mines = [k for k in hidden if k in deduced_mine]
-                unknown = [k for k in hidden if k not in deduced_mine and k not in deduced_safe]
-                remaining = cell['count'] - len(known_mines)
-                if remaining == 0 and unknown:
-                    for k in unknown:
+                diff_cells = b['unknown'] - a['unknown']
+                diff_count = b['remaining'] - a['remaining']
+                if diff_count == 0 and diff_cells:
+                    for k in diff_cells:
                         if k not in deduced_safe:
                             deduced_safe.add(k)
                             changed = True
-                elif remaining == len(unknown) and unknown:
-                    for k in unknown:
+                elif diff_count == len(diff_cells) and diff_cells:
+                    for k in diff_cells:
                         if k not in deduced_mine:
                             deduced_mine.add(k)
                             changed = True

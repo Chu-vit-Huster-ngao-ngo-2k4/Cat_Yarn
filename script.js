@@ -605,41 +605,93 @@ function buyBoosterWithAd(btn) {
 // BOOSTER: GỢI Ý (Hint) — chỉ ra 1 ô suy luận được chắc chắn AN TOÀN dựa trên các
 // đầu mối đang có, dùng đúng logic suy luận từng bước (như solver tạo level) chứ
 // không "ăn gian" chỉ đường tối ưu — người chơi vẫn phải tự bước tới.
+//
+// 2 luật suy luận, lặp tới khi không suy thêm được gì (đúng như solver kiểm/tạo
+// level trong tools/level_checker.py và tools/level_editor.html — PHẢI sửa cả 3
+// nơi cùng lúc nếu đổi thuật toán, không thì Gợi Ý trong game có thể "bó tay" ở
+// đúng chỗ mà solver lại bảo là giải được):
+//   Luật A (1 ô số, tự nó): hết bẫy cần tìm quanh nó -> mọi ô chưa biết còn lại AN TOÀN.
+//   Luật B (1 ô số, tự nó): số ô chưa biết còn lại đúng bằng số bẫy cần tìm -> tất cả là BẪY.
+//   Luật C (so sánh 2 ô số CHỒNG LẤN — pattern "1-2" kinh điển của Minesweeper):
+//     nếu vùng ô-chưa-biết của ô A là tập CON của vùng ô-chưa-biết của ô B, thì
+//     phần CHÊNH LỆCH (B trừ A) phải chứa đúng (soBayConLaiCuaB - soBayConLaiCuaA)
+//     bẫy — hết 0 thì phần chênh lệch toàn AN TOÀN, đúng bằng số ô chênh lệch thì
+//     toàn BẪY. Mạnh hơn hẳn Luật A/B (vốn chỉ là trường hợp riêng khi A rỗng).
 // =============================================================================
 
-function findHintCell() {
+// Gom toàn bộ "đầu mối" hiện có (mỗi ô số đã mở, còn ô lân cận chưa biết) thành
+// 1 danh sách {unknown: Set các toạ độ 'r,c', remaining: số bẫy còn lại cần tìm}
+// — dùng chung cho cả Luật A/B (đơn) lẫn Luật C (so sánh cặp).
+function collectConstraints(deducedMine, deducedSafe) {
+    const constraints = [];
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            const cell = grid[r][c];
+            if (!cell.revealed || cell.type !== 'N') continue;
+            const hidden = [];
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = r + dr, nc = c + dc;
+                    if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
+                    if (!grid[nr][nc].revealed) hidden.push(nr + ',' + nc);
+                }
+            }
+            if (hidden.length === 0) continue;
+            const knownMines = hidden.filter(k => deducedMine.has(k));
+            const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
+            if (unknown.length === 0) continue;
+            constraints.push({ unknown: new Set(unknown), remaining: cell.count - knownMines.length });
+        }
+    }
+    return constraints;
+}
+
+// Chạy 1 vòng suy luận đầy đủ (Luật A/B/C) tới khi không còn suy thêm được gì,
+// gom kết quả vào deducedSafe/deducedMine (dùng chung cho Gợi Ý và có thể tái sử
+// dụng ở nơi khác nếu cần sau này).
+function deduceAll() {
     const deducedMine = new Set();
     const deducedSafe = new Set();
     let changed = true;
     while (changed) {
         changed = false;
-        for (let r = 0; r < GRID_ROWS; r++) {
-            for (let c = 0; c < GRID_COLS; c++) {
-                const cell = grid[r][c];
-                if (!cell.revealed || cell.type !== 'N') continue;
-                const hidden = [];
-                for (let dr = -1; dr <= 1; dr++) {
-                    for (let dc = -1; dc <= 1; dc++) {
-                        if (dr === 0 && dc === 0) continue;
-                        const nr = r + dr, nc = c + dc;
-                        if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
-                        if (!grid[nr][nc].revealed) hidden.push(nr + ',' + nc);
-                    }
-                }
-                if (hidden.length === 0) continue;
-                const knownMines = hidden.filter(k => deducedMine.has(k));
-                // Loại cả ô đã suy ra là bẫy LẪN ô đã suy ra an toàn khỏi "còn chưa biết"
-                // -> cho phép suy luận nhiều bước cộng dồn (giống hệt solver tạo level).
-                const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
-                const remaining = cell.count - knownMines.length;
-                if (remaining === 0 && unknown.length > 0) {
-                    for (const k of unknown) if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; }
-                } else if (remaining === unknown.length && unknown.length > 0) {
-                    for (const k of unknown) if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; }
+        const constraints = collectConstraints(deducedMine, deducedSafe);
+
+        // Luật A/B — từng đầu mối tự nó.
+        for (const con of constraints) {
+            if (con.remaining === 0 && con.unknown.size > 0) {
+                for (const k of con.unknown) if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; }
+            } else if (con.remaining === con.unknown.size && con.unknown.size > 0) {
+                for (const k of con.unknown) if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; }
+            }
+        }
+
+        // Luật C — so sánh từng cặp đầu mối, tìm quan hệ tập con.
+        for (let i = 0; i < constraints.length; i++) {
+            for (let j = 0; j < constraints.length; j++) {
+                if (i === j) continue;
+                const A = constraints[i], B = constraints[j];
+                if (A.unknown.size === 0 || A.unknown.size >= B.unknown.size) continue;
+                // A phải là tập CON THỰC SỰ của B (nhỏ hơn B) thì "chênh lệch" mới có nghĩa.
+                let isSubset = true;
+                for (const k of A.unknown) if (!B.unknown.has(k)) { isSubset = false; break; }
+                if (!isSubset) continue;
+                const diffCells = [...B.unknown].filter(k => !A.unknown.has(k));
+                const diffCount = B.remaining - A.remaining;
+                if (diffCount === 0 && diffCells.length > 0) {
+                    for (const k of diffCells) if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; }
+                } else if (diffCount === diffCells.length && diffCells.length > 0) {
+                    for (const k of diffCells) if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; }
                 }
             }
         }
     }
+    return { deducedSafe, deducedMine };
+}
+
+function findHintCell() {
+    const { deducedSafe } = deduceAll();
 
     let best = null, bestDist = Infinity;
     for (const key of deducedSafe) {
