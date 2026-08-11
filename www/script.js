@@ -427,22 +427,34 @@ async function fetchLevelFile(idx) {
     }
 }
 
+// Chỉ dùng để ƯỚC LƯỢNG % thanh loading (màn Loading) — KHÔNG giới hạn số level
+// thật, loadLevels() vẫn tự dò tới khi hết file như cũ. Nếu số level thật vượt
+// qua con số này, thanh chỉ dừng ở mức trần dưới (95%) chờ thêm chứ không báo sai
+// "đã xong" sớm — xem clamp bên dưới.
+const ESTIMATED_LEVEL_COUNT = 40;
+
 async function loadLevels() {
     const found = [];
     let idx = 1;
+    const fillEl = document.getElementById('loading-bar-fill');
     while (true) {
         const data = await fetchLevelFile(idx);
         if (!data) break;
         found.push(data);
         idx++;
+        if (fillEl) {
+            const pct = Math.min(95, Math.round((idx / ESTIMATED_LEVEL_COUNT) * 100));
+            fillEl.style.width = pct + '%';
+        }
     }
     LEVELS = found;
+    if (fillEl) fillEl.style.width = '100%';
 }
 
 let currentLevelIdx = 0;
 // Kích thước lưới hiện tại — đổi theo từng level (5x5 -> 9x9), gán lại trong loadLevel().
 let GRID_ROWS = 5, GRID_COLS = 5;
-let grid, playerPos, history = [], isGameOver = false;
+let grid, playerPos, isGameOver = false;
 let catEl = null;
 let pendingReveals = []; // ô vừa lộ diện trong nước đi này, dùng để bung có thứ tự (loang)
 let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắng) — mạnh/nảy hơn bung thường
@@ -546,14 +558,78 @@ function updateBoosterBadges() {
     }
 }
 
+// =============================================================================
+// MỞ KHOÁ BOOSTER DẦN THEO LEVEL — "Gợi Ý" mở từ Level 5, "Soi Bẫy" mở từ Level 9
+// (số level ở đây tính từ 1, index trong LEVELS tính từ 0 nên trừ 1). Trước khi
+// mở khoá thì ẨN HẲN nút đi (chưa cần biết tới), lúc vừa chạm mốc unlock thì hiện
+// popup giới thiệu + BẮT dùng thử 1 lần MIỄN PHÍ (không trừ số lượt đang có) ngay
+// trên bàn cờ hiện tại để người chơi biết ngay công dụng. Trạng thái đã unlock lưu
+// localStorage, MỘT KHI đã unlock thì giữ mãi (kể cả lỡ quay lại chơi lại level đầu
+// qua cheat menu), không ẩn lại nút.
+// =============================================================================
+const HINT_UNLOCK_LEVEL_IDX = 4; // Level 5
+const BOMB_UNLOCK_LEVEL_IDX = 8; // Level 9
+const HINT_UNLOCKED_KEY = 'catYarnHintUnlocked';
+const BOMB_UNLOCKED_KEY = 'catYarnBombUnlocked';
+
+let hintUnlocked = false;
+let bombUnlocked = false;
+let pendingUnlockPopups = []; // hàng đợi, phòng trường hợp cheat nhảy thẳng qua cả 2 mốc unlock cùng lúc
+
+function loadBoosterUnlockState() {
+    try { hintUnlocked = localStorage.getItem(HINT_UNLOCKED_KEY) === '1'; } catch (e) { hintUnlocked = false; }
+    try { bombUnlocked = localStorage.getItem(BOMB_UNLOCKED_KEY) === '1'; } catch (e) { bombUnlocked = false; }
+}
+
+function updateBoosterUnlockUI() {
+    const hintBtn = document.getElementById('hint-btn');
+    const bombBtn = document.getElementById('bomb-reveal-btn');
+    if (hintBtn) hintBtn.classList.toggle('booster-locked', !hintUnlocked);
+    if (bombBtn) bombBtn.classList.toggle('booster-locked', !bombUnlocked);
+}
+
+// Gọi mỗi lần vào màn (loadLevel) — nếu vừa CHẠM MỐC unlock lần đầu thì đánh dấu
+// đã unlock + xếp popup giới thiệu vào hàng đợi để hiện ngay sau khi bàn cờ vẽ xong.
+function maybeUnlockBooster(type, unlockIdx) {
+    const already = type === 'hint' ? hintUnlocked : bombUnlocked;
+    if (already || currentLevelIdx < unlockIdx) return;
+    if (type === 'hint') {
+        hintUnlocked = true;
+        try { localStorage.setItem(HINT_UNLOCKED_KEY, '1'); } catch (e) { /* bỏ qua */ }
+    } else {
+        bombUnlocked = true;
+        try { localStorage.setItem(BOMB_UNLOCKED_KEY, '1'); } catch (e) { /* bỏ qua */ }
+    }
+    updateBoosterUnlockUI();
+    pendingUnlockPopups.push(type);
+}
+
+function processNextUnlockPopup() {
+    if (!pendingUnlockPopups.length) return;
+    const type = pendingUnlockPopups.shift();
+    const isHint = type === 'hint';
+    document.getElementById('booster-unlock-icon').innerText = isHint ? '💡' : '💣';
+    document.getElementById('booster-unlock-title').innerText = isHint ? 'Mở Khoá "Gợi Ý"!' : 'Mở Khoá "Soi Bẫy"!';
+    document.getElementById('booster-unlock-message').innerText = isHint
+        ? 'Bí đường quá thì bấm nút này, mèo sẽ chỉ luôn 1 ô AN TOÀN gần nhất để bước tới!'
+        : 'Nghi ngờ ô nào cũng có thể là bẫy? Bấm nút này để mở đại 1 bẫy ngẫu nhiên (đã tháo ngòi sẵn, đi ngang qua vẫn an toàn)!';
+    const btn = document.getElementById('booster-unlock-btn');
+    btn.onclick = () => {
+        document.getElementById('booster-unlock-modal').classList.remove('show');
+        if (isHint) useHint(true); else revealRandomBomb(true);
+        processNextUnlockPopup(); // còn cái nào trong hàng đợi thì hiện tiếp
+    };
+    document.getElementById('booster-unlock-modal').classList.add('show');
+}
+
 // Popup mua thêm booster khi đã dùng hết — mở khi bấm nút lúc số lượng = 0.
 let boosterShopType = null; // 'hint' | 'undo'
 
 function openBoosterShop(type) {
     boosterShopType = type;
     const isHint = type === 'hint';
-    document.getElementById('booster-shop-icon').innerText = isHint ? '💡' : '↩️';
-    document.getElementById('booster-shop-title').innerText = isHint ? 'Hết Gợi Ý Rồi!' : 'Hết Lượt Quay Lại Rồi!';
+    document.getElementById('booster-shop-icon').innerText = isHint ? '💡' : '💣';
+    document.getElementById('booster-shop-title').innerText = isHint ? 'Hết Gợi Ý Rồi!' : 'Hết Lượt Soi Bẫy Rồi!';
     document.getElementById('booster-shop-message').innerText = 'Mua thêm để dùng tiếp nhé!';
     const coinBtn = document.querySelector('#booster-shop-modal .btn-blue');
     const adBtn = document.querySelector('#booster-shop-modal .btn-green');
@@ -710,12 +786,60 @@ function findHintCell() {
         const dist = Math.abs(r - playerPos.r) + Math.abs(c - playerPos.c);
         if (dist < bestDist) { bestDist = dist; best = { r, c }; }
     }
-    return best;
+    if (best) return best;
+
+    // Chưa có ô số nào lộ ra để suy luận (vừa vào màn, chưa bước lần nào) -> deduceAll()
+    // luôn trả về rỗng. Rơi về đúng bất biến của MỌI level (xem tools/level_checker.py:
+    // "Cac o canh Start deu an toan"): nếu mèo còn đứng nguyên ở ô Start thì các ô KỀ nó
+    // chắc chắn an toàn dù chưa có số nào chứng minh — quan trọng nhất là để popup "dùng
+    // thử miễn phí" lúc vừa unlock Gợi Ý luôn có ô để chỉ, không rơi vào cảnh "chưa đủ
+    // manh mối" ngay lần đầu tiên người chơi thấy tính năng này.
+    if (grid[playerPos.r][playerPos.c].type === 'S') {
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const r = playerPos.r + dr, c = playerPos.c + dc;
+                if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS) continue;
+                if (grid[r][c].revealed || grid[r][c].flagged) continue;
+                return { r, c };
+            }
+        }
+    }
+    return null;
 }
 
 // Ô đang được Gợi Ý trỏ tới (nếu có) — vòng tròn CHỈ biến mất khi mèo thật sự bước
 // vào đúng ô này (xem revealAndMove()), không tự tắt theo thời gian.
 let hintTargetCell = null;
+
+// "Soi Quanh" — khoanh viền 8 ô lân cận vị trí mèo đang đứng, thuần công cụ ĐẾM
+// (không suy luận hộ, không thêm thông tin gì cả) cho dễ nhìn thiếu/đủ trên bàn
+// cờ lớn. Bật/tắt qua toggleNeighborHighlight(), tự tắt khi sang màn mới (không
+// lưu localStorage — TODO sau này gắn thời gian dùng + quảng cáo, xem lúc đó có
+// cần nhớ trạng thái không).
+let neighborHighlightOn = false;
+
+// Chỉ hiện khoanh vùng khi mèo ĐỨNG YÊN — ẩn hẳn trong lúc mèo đang trượt sang ô
+// mới, tránh vòng khoanh "chạy trước" vị trí mèo thật (mèo trượt mất CAT_MOVE_MS,
+// khớp đúng transition left/top của .cat-player trong style.css). Theo dõi bằng
+// cách so sánh toạ độ pixel MỚI với toạ độ LẦN TRƯỚC trong updateCatPosition() —
+// đổi khác nhau tức là vừa có 1 bước di chuyển thật.
+const CAT_MOVE_MS = 260;
+// Người chơi bấm di chuyển liên tục (nhiều ô/giây) thì hẹn giờ NGAY SAU KHI TRƯỢT
+// XONG (chỉ CAT_MOVE_MS) khiến khoanh vùng chớp nháy hiện lên giữa các lần bấm rồi
+// tắt ngay khi bấm tiếp — riêng cho việc HIỆN khoanh vùng, chờ thêm 1 khoảng ĐỨNG
+// YÊN THẬT SỰ trước khi hiện, để không bị chớp nháy khi đang di chuyển dồn dập.
+const NEIGHBOR_HIGHLIGHT_DELAY_MS = 500;
+let catIsMoving = false;
+let lastCatX = null, lastCatY = null;
+let catMoveSettleTimer = null;
+
+function toggleNeighborHighlight() {
+    neighborHighlightOn = !neighborHighlightOn;
+    document.getElementById('neighbor-highlight-btn').classList.toggle('active', neighborHighlightOn);
+    if (grid) applyNeighborHighlight(); // chỉ có DOM ô để cập nhật khi đang giữa 1 màn chơi
+    hideNeighborBtnHint(); // người chơi vừa tự bấm nút -> hết cần chỉ tay/nhắc chữ nữa
+}
 
 function clearHint() {
     hintTargetCell = null;
@@ -723,18 +847,26 @@ function clearHint() {
     if (ring) ring.classList.remove('show');
 }
 
-function useHint() {
+// free = true: lượt dùng thử MIỄN PHÍ khi vừa mở khoá (xem processNextUnlockPopup()),
+// không trừ vào số lượt hintCount đang có của người chơi.
+function useHint(free) {
     if (isGameOver || isWalking) return;
     if (tutorialActive) { nudgeTutorialGuide(); return; }
-    if (hintCount <= 0) { openBoosterShop('hint'); return; }
+    if (!free && !hintUnlocked) {
+        updateStatus(`🔒 Chơi tới Level ${HINT_UNLOCK_LEVEL_IDX + 1} sẽ mở khoá Gợi Ý nhé!`, '#ff5964');
+        return;
+    }
+    if (!free && hintCount <= 0) { openBoosterShop('hint'); return; }
     const target = findHintCell();
     if (!target) {
         updateStatus('🤔 Chưa đủ manh mối để gợi ý, khám phá thêm chút nữa nhé!');
         return;
     }
-    hintCount--;
-    saveBoosterCounts();
-    updateBoosterBadges();
+    if (!free) {
+        hintCount--;
+        saveBoosterCounts();
+        updateBoosterBadges();
+    }
     updateStatus('💡 Ô đang nhấp nháy an toàn đó, thử bước tới xem!', '#1982c4');
 
     const el = document.querySelector(`[data-row="${target.r}"][data-col="${target.c}"]`);
@@ -807,6 +939,47 @@ function markLevelCompleted(idx) {
     saveProgress();
 }
 
+// =============================================================================
+// LƯU TIẾN TRÌNH GIỮA MÀN — trước đây thoát app dở màn (chưa qua) là mất sạch,
+// phải chơi lại từ đầu màn đó. Giờ tự lưu lại state (ô nào mở/cắm cờ, mèo đứng
+// đâu, đã tìm màu chưa...) sau MỖI thay đổi, và khôi phục lại khi loadLevel(idx,
+// true) được gọi VỚI Ý ĐỊNH RÕ RÀNG là tiếp tục (chỉ playCurrentLevel() truyền
+// true — xem startLevel()) — LUÔN đọc THẲNG từ localStorage mỗi lần cần (KHÔNG
+// cache 1 lần lúc mở app rồi tiêu thụ dần): app là single-page, người chơi có thể
+// Play -> Home -> Play nhiều lần trong CÙNG 1 phiên mà không tải lại trang, nếu
+// cache-rồi-tiêu-thụ thì lần bấm "Tiếp Tục" thứ 2 trở đi sẽ không còn gì để đọc
+// nữa dù dữ liệu vẫn còn nguyên trong localStorage (đây chính là bug đã gặp).
+// Chỉ lưu ĐÚNG những gì không tự suy ra lại được từ LEVELS[idx] (type/count/
+// hasColor luôn tính lại y hệt mỗi lần loadLevel()).
+// =============================================================================
+const LEVEL_PROGRESS_KEY = 'catYarnLevelProgress';
+
+function readSavedLevelProgress() {
+    try {
+        return JSON.parse(localStorage.getItem(LEVEL_PROGRESS_KEY));
+    } catch (e) { return null; }
+}
+
+function saveLevelProgress() {
+    if (!grid || isGameOver || tutorialActive) return; // Level 1 (tutorial) tự kịch bản riêng theo TUTORIAL_STEPS, không lưu step dở dang
+    try {
+        localStorage.setItem(LEVEL_PROGRESS_KEY, JSON.stringify({
+            levelIdx: currentLevelIdx,
+            playerPos,
+            foundColor1,
+            foundColor2,
+            usedReviveThisLevel,
+            cells: grid.map(row => row.map(cell => ({
+                revealed: cell.revealed, flagged: cell.flagged, defused: !!cell.defused
+            })))
+        }));
+    } catch (e) { /* bỏ qua nếu localStorage bị chặn/đầy */ }
+}
+
+function clearLevelProgress() {
+    try { localStorage.removeItem(LEVEL_PROGRESS_KEY); } catch (e) { /* bỏ qua */ }
+}
+
 function isLevelUnlocked(idx) {
     return idx === 0 || completedLevels.has(idx - 1);
 }
@@ -833,15 +1006,27 @@ function renderHomeScreen() {
         playBtn.textContent = '🔜 Sắp Ra Mắt';
         playBtn.disabled = true;
     } else {
-        playBtn.textContent = '▶ Chơi';
+        playBtn.textContent = hasInProgressLevel() ? '🔄 Tiếp Tục' : '▶ Chơi';
         playBtn.disabled = false;
     }
     updateCoinDisplay();
 }
 
+// Có đúng 1 tiến trình dở dang khớp với level SẼ được vào (getNextPlayableLevel())
+// hay không — đọc thẳng localStorage (không dựa vào pendingResumeProgress, vì biến
+// đó đã bị null hoá ngay sau lượt loadLevel() đầu tiên, không còn phản ánh đúng
+// trạng thái nếu người chơi quay lại Home rồi vào lại nhiều lần trong 1 phiên).
+function hasInProgressLevel() {
+    const data = readSavedLevelProgress();
+    return !!data && data.levelIdx === getNextPlayableLevel();
+}
+
+// Không cần tự setTimeout riêng ở đây nữa — attachButtonClickDelay() (cuối file)
+// đã chặn CHUNG cho mọi nút UI, đợi hiệu ứng bấm chạy xong rồi mới thật sự gọi
+// hàm onclick, nên hàm này chạy như bình thường không cần biết gì về độ trễ.
 function playCurrentLevel() {
     if (areAllLevelsCompleted()) return; // chưa có thêm level mới, chờ bản cập nhật sau
-    startLevel(getNextPlayableLevel());
+    startLevel(getNextPlayableLevel(), true); // true = thử khôi phục tiến trình dở dang nếu có
 }
 
 function showScreen(name) {
@@ -851,11 +1036,14 @@ function showScreen(name) {
     fitBoardToSpace();
 }
 
-function startLevel(idx) {
+// tryResume = true: cho phép khôi phục tiến trình dở dang nếu localStorage đang
+// có sẵn đúng khớp level này (chỉ playCurrentLevel() truyền true — nút "Tiếp Tục"
+// ở Home). Mọi lối vào khác (tutorial lần đầu...) mặc định false = luôn bàn cờ mới.
+function startLevel(idx, tryResume) {
     if (!LEVELS.length) return; // dữ liệu level (fetch từ levels/*.json) chưa nạp xong
     if (!isLevelUnlocked(idx)) return;
     showScreen('game');
-    loadLevel(idx);
+    loadLevel(idx, tryResume);
     fitBoardToSpace();
 }
 
@@ -879,7 +1067,7 @@ let lastMoveTime = Date.now();
 // tương đối theo #game-board (không có padding/border riêng) nên phải cộng cả 2.
 const CELL_SIZE = 70, CELL_GAP = 8, BOARD_PAD = 18, CAT_SIZE = 56;
 
-function loadLevel(idx) {
+function loadLevel(idx, tryResume) {
     endGuidedTutorial();
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
     isWalking = false; // đề phòng lỡ đang tự chạy dở dang từ màn trước, không để input bị kẹt khoá
@@ -909,6 +1097,15 @@ function loadLevel(idx) {
     }
     foundColor1 = false;
     foundColor2 = false;
+    neighborHighlightOn = false;
+    document.getElementById('neighbor-highlight-btn').classList.remove('active');
+    // Huỷ bộ đếm "mèo vừa trượt xong" của màn CŨ — không thì lỡ nó bắn sau khi đã
+    // sang màn mới, applyNeighborHighlight() sẽ dùng nhầm playerPos/kích thước lưới
+    // của màn mới để tính toạ độ, có thể khoanh sai ô.
+    catIsMoving = false;
+    lastCatX = null;
+    lastCatY = null;
+    clearTimeout(catMoveSettleTimer);
 
     // Tính số bẫy lân cận (8 hướng) cho từng ô, kiểu Minesweeper
     for (let r = 0; r < GRID_ROWS; r++) {
@@ -933,13 +1130,38 @@ function loadLevel(idx) {
         }
     }
 
-    history = [];
     isGameOver = false;
     lastMoveTime = Date.now();
     pendingReveals = [];
     usedReviveThisLevel = false;
     particles = [];
     ctx.clearRect(0, 0, canvas.logicalWidth, canvas.logicalHeight);
+
+    // Khôi phục tiến trình dở dang (nếu có) — CHỈ khi được gọi với ý định rõ ràng
+    // (tryResume=true, xem startLevel()), và phải ĐÚNG level này + đúng kích thước
+    // lưới (phòng khi level đã bị sửa lại từ lần chơi trước). Đọc THẲNG localStorage
+    // ngay lúc này (không dùng biến cache từ trước) để hoạt động đúng cả khi người
+    // chơi Play -> Home -> Play nhiều lần trong CÙNG 1 phiên không tải lại trang.
+    const savedProgress = tryResume ? readSavedLevelProgress() : null;
+    const resume = (savedProgress && savedProgress.levelIdx === idx &&
+        Array.isArray(savedProgress.cells) &&
+        savedProgress.cells.length === GRID_ROWS &&
+        savedProgress.cells[0] && savedProgress.cells[0].length === GRID_COLS)
+        ? savedProgress : null;
+    if (resume) {
+        for (let r = 0; r < GRID_ROWS; r++) {
+            for (let c = 0; c < GRID_COLS; c++) {
+                const saved = resume.cells[r][c];
+                grid[r][c].revealed = grid[r][c].revealed || !!saved.revealed; // S/E vốn đã revealed sẵn, giữ nguyên
+                grid[r][c].flagged = !!saved.flagged;
+                if (saved.defused) grid[r][c].defused = true;
+            }
+        }
+        playerPos = resume.playerPos;
+        foundColor1 = !!resume.foundColor1;
+        foundColor2 = !!resume.foundColor2;
+        usedReviveThisLevel = !!resume.usedReviveThisLevel;
+    }
 
     document.getElementById('level-title').innerText = `Level ${currentLevelIdx + 1}`;
     // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
@@ -964,10 +1186,125 @@ function loadLevel(idx) {
     pendingBubbleLoad = true;
     render(true);
     pendingBubbleLoad = false;
+
+    // Vừa khôi phục tiến trình -> đã tìm màu từ trước rồi thì tô lại mèo NGAY (không
+    // đợi "tìm thấy" mới tô, vì onColorFound() chỉ chạy đúng lúc VỪA mở trúng ô màu —
+    // xem checkColorPickup()), khớp y hệt hiệu ứng onColorFound() nhưng bỏ âm thanh/
+    // thông báo (không phải vừa tìm được, chỉ là đang tải lại đúng trạng thái cũ). Phải
+    // làm SAU render(true) ở trên vì catEl chỉ thực sự được tạo trong updateCatPosition()
+    // (gọi từ trong render()) — trước đó catEl vẫn null với 1 phiên trình duyệt mới mở.
+    if (resume && catEl) {
+        const dual = levelNeedsColor1 && levelNeedsColor2;
+        if (dual) {
+            if (foundColor1) catEl.classList.add('cat-split-colored', 'cat-found-color1');
+            if (foundColor2) catEl.classList.add('cat-split-colored', 'cat-found-color2');
+        } else if (foundColor1 || foundColor2) {
+            catEl.classList.add('cat-colored');
+        }
+    }
     // Mỗi level có thể khác kích thước lưới (5x5 -> 9x9) -> luôn co lại cho vừa màn
     // hình ngay khi vừa dựng xong bàn cờ mới, không chỉ lúc mở màn Game lần đầu.
     fitBoardToSpace();
     maybeShowColorTutorial();
+    hideStartSafeHint(); // dọn tàn dư từ màn trước, tránh dính sang màn không cần
+    hideNeighborBtnHint();
+    if (currentLevelIdx === 1) {
+        // Level 2 (index 1): nhắc luật "cạnh Start luôn an toàn" + tự bật luôn "Soi
+        // Quanh" (neighborHighlightOn vừa bị reset về false ở trên) để người chơi
+        // thấy ngay hiệu ứng khoanh 8 ô quanh mèo hoạt động thế nào ở màn thật.
+        showStartSafeHint();
+        neighborHighlightOn = true;
+        document.getElementById('neighbor-highlight-btn').classList.add('active');
+        applyNeighborHighlight();
+    }
+    if (currentLevelIdx === 2) showNeighborBtnHint(); // Level 3 (index 2): lần này để người chơi TỰ bấm bật, chỉ trỏ tay gợi ý
+
+    updateBoosterUnlockUI();
+    maybeUnlockBooster('hint', HINT_UNLOCK_LEVEL_IDX);
+    maybeUnlockBooster('bomb', BOMB_UNLOCK_LEVEL_IDX);
+    processNextUnlockPopup();
+}
+
+// Bong bóng chữ dùng transform: translateX(-50%) để CANH GIỮA quanh toạ độ "left"
+// được gán — nếu ô/nút mục tiêu nằm quá gần rìa màn hình (màn hẹp, DevTools thu
+// nhỏ viewport...), nửa bong bóng phía ngoài sẽ bị tràn ra khỏi màn hình. Ghim lại
+// trong khoảng [nửa bề rộng bong bóng + lề, bề rộng màn hình - nửa bề rộng - lề]
+// để LUÔN nằm gọn trong màn hình, bất kể mục tiêu ở đâu.
+function clampBarCenterX(bar, desiredCenterX) {
+    const margin = 10;
+    const halfWidth = bar.offsetWidth / 2;
+    const min = halfWidth + margin;
+    const max = window.innerWidth - halfWidth - margin;
+    if (max < min) return window.innerWidth / 2; // màn quá hẹp so với bong bóng -> đành canh giữa màn
+    return Math.min(Math.max(desiredCenterX, min), max);
+}
+
+// Gợi ý ngắn cho Level 3: KHÔNG tự bật "Soi Quanh" như Level 2 nữa (để người chơi
+// tự chủ động bấm) — chỉ chỉ tay + nhắc chữ vào đúng nút, ẩn ngay khi bấm nút đó
+// (xem toggleNeighborHighlight()). Dùng #level-hint-hand riêng (không phải
+// #tutorial-hand) vì positionTutorialUI() gọi sau MỌI lần render() sẽ tự ẩn
+// #tutorial-hand đi khi tutorialActive === false, không hợp cho việc này.
+function showNeighborBtnHint() {
+    const btn = document.getElementById('neighbor-highlight-btn');
+    const hand = document.getElementById('level-hint-hand');
+    const rect = btn.getBoundingClientRect();
+    // Chỉ NGANG (👉) từ bên trái nút, canh giữa theo chiều dọc của nút — tự nhiên
+    // hơn hẳn kiểu chỉ từ trên xuống vì nút nằm ngang hàng chữ, không phải 1 ô vuông.
+    hand.style.left = rect.left + 'px';
+    hand.style.top = (rect.top + rect.height / 2) + 'px';
+    hand.classList.add('show', 'point-right');
+
+    const bar = document.getElementById('level-hint-bar');
+    bar.querySelector('.tutorial-bar-text').textContent =
+        'Thử bấm nút này xem sao!';
+    bar.classList.toggle('below', rect.top < 170);
+    bar.style.top = rect.top < 170 ? (rect.bottom + 16) + 'px' : (rect.top - 16) + 'px';
+    bar.classList.add('show'); // phải add('show') TRƯỚC khi đo offsetWidth (display:none thì width luôn = 0)
+    bar.style.left = clampBarCenterX(bar, rect.left + rect.width / 2) + 'px';
+}
+
+function hideNeighborBtnHint() {
+    document.getElementById('level-hint-hand').classList.remove('show');
+    document.getElementById('level-hint-bar').classList.remove('show');
+}
+
+// Gợi ý ngắn cho Level 2 (không phải tutorial dắt tay đầy đủ như Level 1): khoanh
+// xanh các ô sát Start + 1 dòng chữ nhắc luật "cạnh Start luôn an toàn" (bất biến
+// của mọi level, xem tools/level_checker.py: "Cac o canh Start deu an toan"), để
+// người chơi mạnh dạn bước ngay ô đầu tiên thay vì đoán mò/sợ sệt. Tự ẩn khi mèo
+// bước đi (xem handleMoveInput) — không dùng chung DOM/state với hệ tutorial dắt
+// tay đầy đủ (#tutorial-bar/tutorialActive) vì đó là 1 cơ chế lớn hơn nhiều.
+function showStartSafeHint() {
+    const cells = [];
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const r = playerPos.r + dr, c = playerPos.c + dc;
+            if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS) continue;
+            cells.push({ r, c });
+        }
+    }
+    if (!cells.length) return;
+    cells.forEach(({ r, c }) => {
+        const el = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+        if (el) el.classList.add('start-safe-hint');
+    });
+
+    const bar = document.getElementById('level-hint-bar');
+    bar.querySelector('.tutorial-bar-text').textContent =
+        `💡 Mẹo: ${cells.length} ô khoanh xanh sát ô xuất phát LUÔN an toàn!`;
+    const boardRect = document.getElementById('cells-layer').getBoundingClientRect();
+    const pad = 10;
+    const placeBelow = boardRect.top < 170;
+    bar.classList.toggle('below', placeBelow);
+    bar.style.top = placeBelow ? (boardRect.bottom + pad + 16) + 'px' : (boardRect.top - pad - 16) + 'px';
+    bar.classList.add('show'); // phải add('show') TRƯỚC khi đo offsetWidth (display:none thì width luôn = 0)
+    bar.style.left = clampBarCenterX(bar, boardRect.left + boardRect.width / 2) + 'px';
+}
+
+function hideStartSafeHint() {
+    document.querySelectorAll('.cell.start-safe-hint').forEach(el => el.classList.remove('start-safe-hint'));
+    document.getElementById('level-hint-bar').classList.remove('show');
 }
 
 function showResultModal({ type, icon, title, message, actions, coinReward }) {
@@ -1093,7 +1430,7 @@ document.getElementById('color-tutorial-modal').addEventListener('click', (e) =>
 });
 
 // =============================================================================
-// TẬP CHƠI TƯƠNG TÁC: chỉ tay (👇) vào đúng ô cần bấm, khoanh vòng VÀNG vào ô SỐ
+// TẬP CHƠI TƯƠNG TÁC: chỉ tay (👇) vào đúng ô cần bấm, khoanh vòng CAM vào ô SỐ
 // dùng làm bằng chứng (clue) và vòng đỏ/xanh vào ô kết luận (target), giải thích
 // rõ VÌ SAO suy ra được — không bắt người chơi "tin chay". Khoá các ô khác lại
 // để không bấm nhầm, dắt qua trọn Level 1 thật. Toàn bộ suy luận dưới đây đã được
@@ -1110,23 +1447,35 @@ const TUTORIAL_STEPS = [
     { action: 'click', target: null, clue: null,
       msg: 'Cả một vùng vừa mở ra! Số trên mỗi ô = số bẫy đang ẩn ở ĐÚNG 8 ô sát nó. Cùng xem ví dụ thật để đoán ra bẫy nhé!' },
 
+    { action: 'move', target: { r: 1, c: 2 }, clue: null,
+      msg: 'Chạm vào ô số 1 này để mèo đứng lên đó nhé, đứng lên sẽ soi rõ 8 ô xung quanh luôn!' },
+
     { action: 'click', target: { r: 2, c: 1 }, clue: { r: 1, c: 2 }, danger: true,
-      msg: 'Ô VÀNG ghi số 1 = quanh nó có đúng 1 bẫy. Mà quanh ô đó chỉ còn DUY NHẤT 1 ô chưa mở (khoanh đỏ) — vậy chắc chắn ô đó có bẫy!' },
+      msg: 'Ô CAM (chỗ em vừa đứng) ghi số 1 = quanh nó có đúng 1 bẫy. Nhìn 8 ô sáng xanh quanh mèo xem — chỉ còn DUY NHẤT 1 ô chưa mở (khoanh đỏ) — vậy chắc chắn ô đó có bẫy!' },
 
     { action: 'flag', target: { r: 2, c: 1 }, clue: { r: 1, c: 2 }, danger: true,
       msg: 'Giữ ngón tay lên ô khoanh đỏ (hoặc chuột phải trên máy tính) để cắm cờ 🚩 đánh dấu bẫy vừa đoán ra!' },
 
+    { action: 'move', target: { r: 2, c: 2 }, clue: null,
+      msg: 'Chạm vào ô số 1 này để mèo đứng lên đó, suy luận tiếp nhé!' },
+
     { action: 'click', target: { r: 3, c: 3 }, clue: { r: 2, c: 2 },
-      msg: 'Ô VÀNG này cũng ghi số 1 — mà bẫy đó chính là ô em vừa cắm cờ rồi! Vậy 3 ô trống còn lại quanh nó (kể cả ô khoanh xanh) đều AN TOÀN.' },
+      msg: 'Ô CAM (chỗ em vừa đứng) cũng ghi số 1 — mà bẫy đó chính là ô em vừa cắm cờ rồi! Vậy 3 ô trống còn lại quanh nó (kể cả ô khoanh xanh) đều AN TOÀN.' },
 
     { action: 'move', target: { r: 3, c: 3 }, clue: { r: 2, c: 2 },
       msg: 'Chạm vào ô khoanh xanh đó nhé, an toàn 100% rồi!' },
 
+    { action: 'move', target: { r: 2, c: 4 }, clue: null,
+      msg: 'Chạm vào ô số 1 này để mèo đứng lên soi tiếp nhé!' },
+
     { action: 'click', target: { r: 3, c: 4 }, clue: { r: 2, c: 4 }, danger: true,
-      msg: 'Y hệt lúc nãy: ô VÀNG ghi số 1 và chỉ còn đúng 1 ô chưa mở cạnh nó (khoanh đỏ) — chắc chắn có bẫy ở đó, né xa ô này ra nhé!' },
+      msg: 'Y hệt lúc nãy: ô CAM (chỗ em vừa đứng) ghi số 1 và chỉ còn đúng 1 ô chưa mở (khoanh đỏ) — chắc chắn có bẫy ở đó, né xa ô này ra nhé!' },
+
+    { action: 'move', target: { r: 3, c: 3 }, clue: null,
+      msg: 'Quay lại ô này 1 chút để soi nốt lần cuối nhé!' },
 
     { action: 'click', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
-      msg: 'Ô VÀNG (chỗ em vừa đứng) ghi số 1 — bẫy đó chính là ô đỏ lúc nãy rồi. Vậy ô khoanh xanh này chắc chắn AN TOÀN!' },
+      msg: 'Ô CAM (chỗ em đang đứng) ghi số 1 — bẫy đó chính là ô đỏ lúc nãy rồi. Vậy ô khoanh xanh này chắc chắn AN TOÀN!' },
 
     { action: 'move', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
       msg: 'Chạm vào ô khoanh xanh nhé!' },
@@ -1141,6 +1490,11 @@ let tutorialStep = 0;
 function startGuidedTutorial() {
     tutorialActive = true;
     tutorialStep = 0;
+    // Bật sẵn "Soi Quanh" để người chơi mới biết ngay tính năng này tồn tại,
+    // thay vì phải tự mò nút — loadLevel() vừa tắt nó khi vào màn nên phải bật lại ở đây.
+    neighborHighlightOn = true;
+    document.getElementById('neighbor-highlight-btn').classList.add('active');
+    applyNeighborHighlight();
     renderTutorialStep();
 }
 
@@ -1150,6 +1504,11 @@ function endGuidedTutorial() {
     document.getElementById('tutorial-bar').classList.remove('show');
     document.getElementById('tutorial-hand').classList.remove('show');
     document.getElementById('tutorial-spotlight').classList.remove('show');
+    // Chỉ tự bật "Soi Quanh" để dạy trong tutorial -> hết tutorial (kể cả tới đích
+    // ăn cá luôn kết thúc luôn) thì tắt lại, không để dính mãi sang lúc chơi thường.
+    neighborHighlightOn = false;
+    document.getElementById('neighbor-highlight-btn').classList.remove('active');
+    applyNeighborHighlight();
 }
 
 function advanceTutorial() {
@@ -1168,6 +1527,32 @@ function renderTutorialStep() {
     document.getElementById('tutorial-continue-btn').style.display = (step.action === 'click') ? 'inline-flex' : 'none';
     bar.classList.add('show');
     positionTutorialUI();
+    // Chuyển bước KHÔNG PHẢI lúc nào cũng đi kèm 1 nước đi thật (bước 'click'/'flag'
+    // không làm mèo bước tới) -> render() (nơi trước đây gắn class tutorial-target/
+    // tutorial-clue) không được gọi lại, khiến vòng khoanh/nhấp nháy vẫn dính ở Ô
+    // của BƯỚC CŨ. Phải chủ động refresh riêng ở đây mỗi khi đổi bước.
+    applyTutorialHighlights();
+}
+
+// Gắn/gỡ class tutorial-target(-danger)/tutorial-clue lên ĐÚNG ô của bước hiện tại,
+// tách khỏi vòng lặp vẽ ô trong render() (giống applyNeighborHighlight()) để gọi
+// riêng được mỗi khi tutorialStep đổi mà không cần vẽ lại cả bàn cờ.
+function applyTutorialHighlights() {
+    document.querySelectorAll('.cell.tutorial-target, .cell.tutorial-target-danger, .cell.tutorial-clue')
+        .forEach(el => el.classList.remove('tutorial-target', 'tutorial-target-danger', 'tutorial-clue'));
+    if (!tutorialActive) return;
+    const step = TUTORIAL_STEPS[tutorialStep];
+    if (step.target) {
+        const el = document.querySelector(`[data-row="${step.target.r}"][data-col="${step.target.c}"]`);
+        if (el) {
+            el.classList.add('tutorial-target');
+            if (step.danger) el.classList.add('tutorial-target-danger');
+        }
+    }
+    if (step.clue) {
+        const el = document.querySelector(`[data-row="${step.clue.r}"][data-col="${step.clue.c}"]`);
+        if (el) el.classList.add('tutorial-clue');
+    }
 }
 
 function nudgeTutorialGuide() {
@@ -1201,36 +1586,30 @@ function positionTutorialUI() {
     spotlight.classList.add('show');
 
     const step = TUTORIAL_STEPS[tutorialStep];
-    let anchorRect;
-    let hasHand = false;
 
     if (step.target) {
         const cellEl = document.querySelector(`[data-row="${step.target.r}"][data-col="${step.target.c}"]`);
         if (!cellEl) { hand.classList.remove('show'); return; }
-        anchorRect = cellEl.getBoundingClientRect();
-        hand.style.left = (anchorRect.left + anchorRect.width / 2) + 'px';
-        hand.style.top = anchorRect.top + 'px';
+        const targetRect = cellEl.getBoundingClientRect();
+        hand.style.left = (targetRect.left + targetRect.width / 2) + 'px';
+        hand.style.top = targetRect.top + 'px';
         hand.classList.add('show');
-        hasHand = true;
     } else {
-        // Bước chỉ để đọc thông tin (không có ô cụ thể) -> neo bong bóng theo cả bàn cờ.
         hand.classList.remove('show');
-        anchorRect = document.getElementById('cells-layer').getBoundingClientRect();
     }
 
-    // Đủ chỗ phía trên thì đặt bong bóng bên trên ô/bàn tay, không thì đặt bên dưới
-    // (tránh bị tràn ra ngoài mép trên màn hình khi ô mục tiêu ở hàng đầu bàn cờ).
-    // Khi có bàn tay đang chỉ (nằm ngay phía trên ô), bong bóng phải chừa thêm chỗ
-    // để không đè lên bàn tay — HAND_CLEARANCE ước lượng đủ chiều cao bàn tay + nảy.
-    const HAND_CLEARANCE = 60;
-    const placeBelow = anchorRect.top < (hasHand ? 210 : 170);
+    // Bong bóng chữ LUÔN neo theo mép TRÊN/DƯỚI của cả bàn cờ (không phải theo ô
+    // mục tiêu/clue riêng lẻ) -> không bao giờ đè lên vòng khoanh vàng/đỏ/xanh
+    // đang giải thích trên ô, bất kể ô đó nằm ở đâu trong bàn cờ.
+    const placeBelow = boardRect.top < 170;
     bar.classList.toggle('below', placeBelow);
-    bar.style.left = (anchorRect.left + anchorRect.width / 2) + 'px';
     if (placeBelow) {
-        bar.style.top = (anchorRect.bottom + 16) + 'px';
+        bar.style.top = (boardRect.bottom + pad + 16) + 'px';
     } else {
-        bar.style.top = (anchorRect.top - (hasHand ? HAND_CLEARANCE : 16)) + 'px';
+        bar.style.top = (boardRect.top - pad - 16) + 'px';
     }
+    bar.classList.add('show'); // phải add('show') TRƯỚC khi đo offsetWidth (display:none thì width luôn = 0)
+    bar.style.left = clampBarCenterX(bar, boardRect.left + boardRect.width / 2) + 'px';
 }
 
 function updateStatus(text, color = '#4a3022') {
@@ -1240,6 +1619,16 @@ function updateStatus(text, color = '#4a3022') {
     el.classList.remove('pulse');
     void el.offsetWidth;
     el.classList.add('pulse');
+}
+
+// render() vẽ lại TOÀN BỘ bàn cờ mỗi lần mèo bước (xoá/tạo lại DOM), nên ::after
+// (hiệu ứng nhấp nháy ô cá) bị huỷ+tạo mới liên tục -> animation cứ giật về đầu
+// chu kỳ thay vì chạy liền mạch. Gán sẵn 1 độ trễ ÂM tính theo thời gian thực để
+// chu kỳ mới của phần tử mới luôn "vào giữa" đúng chỗ nó lẽ ra đang ở.
+const COLOR_GLOW_CYCLE_MS = 1600; // phải khớp đúng thời lượng @keyframes color-cell-glow trong style.css
+function setColorGlowDelay(el) {
+    const elapsed = performance.now() % COLOR_GLOW_CYCLE_MS;
+    el.style.setProperty('--glow-delay', `-${elapsed}ms`);
 }
 
 function render(instant) {
@@ -1263,17 +1652,6 @@ function render(instant) {
 
             if (cheatShowTraps && !cell.revealed && cell.type === 'B') {
                 el.classList.add('cheat-trap-reveal');
-            }
-
-            if (tutorialActive) {
-                const step = TUTORIAL_STEPS[tutorialStep];
-                if (step.target && step.target.r === r && step.target.c === c) {
-                    el.classList.add('tutorial-target');
-                    if (step.danger) el.classList.add('tutorial-target-danger');
-                }
-                if (step.clue && step.clue.r === r && step.clue.c === c) {
-                    el.classList.add('tutorial-clue');
-                }
             }
 
             let contentHTML = '';
@@ -1305,6 +1683,7 @@ function render(instant) {
                 if (levelNeedsColor1 && levelNeedsColor2) el.classList.add('color-cell-split');
                 else if (levelNeedsColor1) el.classList.add('color-cell-tinted');
                 else if (levelNeedsColor2) el.classList.add('color-cell-tinted-2');
+                if (levelNeedsColor1 || levelNeedsColor2) setColorGlowDelay(el);
                 contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
             } else {
                 el.classList.add('revealed-safe');
@@ -1350,7 +1729,40 @@ function render(instant) {
 
     pendingReveals = [];
     updateCatPosition(instant);
+    applyTutorialHighlights();
+    applyNeighborHighlight();
     positionTutorialUI();
+    saveLevelProgress(); // lưu lại sau MỌI lần vẽ (di chuyển/cắm cờ/dùng booster...) để thoát app dở màn vẫn tiếp tục được
+}
+
+// Cập nhật khoanh vùng "Soi Quanh" (8 ô lân cận mèo) — tách riêng khỏi vòng lặp vẽ
+// ô trong render() để có thể gọi LẠI RIÊNG hàm này (không đụng gì tới DOM các ô
+// khác) mỗi khi mèo vừa trượt xong, thay vì phải render() lại TOÀN BỘ bàn cờ —
+// nếu không, những ô đang chờ tới lượt animation-delay của nó (mảng loang lớn,
+// stagger 45ms/ô) sẽ bị xoá mất giữa chừng lúc chưa kịp chạy animation.
+function applyNeighborHighlight() {
+    document.querySelectorAll('.cell.neighbor-highlight').forEach(el => el.classList.remove('neighbor-highlight'));
+    if (!neighborHighlightOn || catIsMoving || !playerPos) return;
+    // Trong lúc hướng dẫn, ô đang là "bằng chứng"/"kết luận" (viền cam/đỏ/xanh) phải
+    // được ưu tiên tuyệt đối — bỏ qua, không tô viền xanh Soi Quanh đè lên, nếu
+    // không người chơi không phân biệt được đâu là ô đang được giải thích.
+    const step = tutorialActive ? TUTORIAL_STEPS[tutorialStep] : null;
+    const isTutorialHighlighted = (r, c) =>
+        step && ((step.target && step.target.r === r && step.target.c === c) ||
+                 (step.clue && step.clue.r === r && step.clue.c === c));
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const r = playerPos.r + dr, c = playerPos.c + dc;
+            if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS) continue;
+            if (isTutorialHighlighted(r, c)) continue;
+            const el = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+            if (!el) continue;
+            el.classList.add('neighbor-highlight');
+            const order = (dr + 1) * 3 + (dc + 1);
+            el.style.setProperty('--neighbor-pop-delay', `${order * 30}ms`);
+        }
+    }
 }
 
 // Khớp với màu chữ .num-1..num-8 trong style.css, dùng cho số hiện trên mặt mèo.
@@ -1410,7 +1822,7 @@ function updateCatPosition(instant) {
                 <polygon class="cat-face-detail" points="50,54 45,60 55,60" fill="#ff85a1" stroke="#4a3022" stroke-width="3" stroke-linejoin="round"/>
                 <path class="cat-mouth cat-mouth-normal" d="M 50 60 Q 44 66 38 62 M 50 60 Q 56 66 62 62" fill="none" stroke="#4a3022" stroke-width="3" stroke-linecap="round"/>
                 <path class="cat-mouth cat-mouth-dizzy" d="M 42 65 Q 50 60 58 65" fill="none" stroke="#4a3022" stroke-width="3" stroke-linecap="round"/>
-                <text class="cat-number-overlay" id="cat-number-overlay" x="50" y="58" text-anchor="middle" dominant-baseline="middle" font-family="'Fredoka', cursive, sans-serif" font-weight="700" font-size="37"></text>
+                <text class="cat-number-overlay" id="cat-number-overlay" x="50" y="58" text-anchor="middle" dominant-baseline="middle" font-family="'Fredoka', cursive, sans-serif" font-weight="700" font-size="50"></text>
             </svg>`;
         document.getElementById('game-board').appendChild(catEl);
     }
@@ -1434,10 +1846,25 @@ function updateCatPosition(instant) {
         catEl.style.top = y + 'px';
         void catEl.offsetWidth;
         catEl.style.transition = '';
+        catIsMoving = false; // vào màn mới/tức thì -> không tính là "đang di chuyển"
+        clearTimeout(catMoveSettleTimer);
     } else {
         catEl.style.left = x + 'px';
         catEl.style.top = y + 'px';
+        // Chỉ HẸN GIỜ tắt catIsMoving ở đây thôi — việc BẬT (catIsMoving = true) phải
+        // làm TRƯỚC khi render() build lại danh sách ô (xem handleMoveInput()),
+        // vì hàm này (updateCatPosition) luôn chạy SAU vòng lặp vẽ ô trong render() —
+        // bật catIsMoving ở đây thì đã trễ mất 1 lượt render, không kịp ẩn khoanh vùng.
+        if (lastCatX !== null && (x !== lastCatX || y !== lastCatY)) {
+            clearTimeout(catMoveSettleTimer);
+            catMoveSettleTimer = setTimeout(() => {
+                catIsMoving = false;
+                applyNeighborHighlight(); // KHÔNG gọi render() ở đây — sẽ xoá mất các ô đang chờ animation-delay dở dang
+            }, NEIGHBOR_HIGHLIGHT_DELAY_MS);
+        }
     }
+    lastCatX = x;
+    lastCatY = y;
 }
 
 function triggerSquashAnimation() {
@@ -1479,6 +1906,7 @@ function toggleFlag(r, c, el) {
 
     cell.flagged = !cell.flagged;
     playSound('flag');
+    saveLevelProgress(); // toggleFlag() không phải lúc nào cũng gọi render() (xem bên dưới) -> phải tự lưu riêng ở đây
 
     // Cập nhật TRỰC TIẾP đúng ô này thôi (không render lại cả bàn cờ) khi có sẵn
     // phần tử DOM — vì lúc này có thể đang GIỮA 1 cú long-press dở dang (ngón tay
@@ -1514,7 +1942,16 @@ function handleCellClick(r, c) {
         return;
     }
 
-    if (tutorialActive) return;
+    // Trong lúc tutorial, chỉ cho tự chạy tới ô Ở XA nếu ô đó ĐÃ MỞ (luôn an toàn,
+    // không phá logic hướng dẫn) hoặc đúng là ô mục tiêu của 1 bước 'move' đang
+    // hướng dẫn — không cho tự chạy vào ô mục tiêu của bước 'click'/'flag' (đó là
+    // ô nguy hiểm đang MINH HOẠ, chưa tới lúc bước vào).
+    if (tutorialActive) {
+        const step = TUTORIAL_STEPS[tutorialStep];
+        const isGuidedMoveTarget = step.action === 'move' && step.target &&
+            step.target.r === r && step.target.c === c;
+        if (!grid[r][c].revealed && !isGuidedMoveTarget) return;
+    }
 
     if (grid[r][c].revealed) {
         // Chạm vào 1 ô ĐÃ MỞ ở xa -> mèo tự tìm đường và chạy 1 mạch qua các ô đã
@@ -1714,9 +2151,9 @@ function handleMoveInput(targetR, targetC) {
     const wasUnknownCell = !targetCell.revealed;
     const wasIdleBeforeThisMove = (Date.now() - lastMoveTime) >= IDLE_THRESHOLD_MS;
 
-    history.push({ grid: JSON.parse(JSON.stringify(grid)), playerPos: { ...playerPos } });
-
+    hideStartSafeHint(); // mèo vừa bước đi thật -> gợi ý "cạnh Start an toàn" hết cần thiết nữa
     playSound('jump');
+    catIsMoving = true; // phải bật TRƯỚC render() để vòng lặp vẽ ô kịp ẩn "Soi Quanh" ngay
     revealAndMove(targetR, targetC);
     render();
     triggerSquashAnimation();
@@ -1870,6 +2307,7 @@ function revealAndMove(r, c) {
         catEl.classList.add('expr-happy');
 
         markLevelCompleted(currentLevelIdx);
+        clearLevelProgress(); // vừa qua màn -> không còn "chơi dở" nữa, dọn sạch tránh khôi phục nhầm màn đã xong
 
         const hasNextLevel = currentLevelIdx < LEVELS.length - 1;
 
@@ -2034,20 +2472,49 @@ function nextLevel() {
     }
 }
 
-function undo() {
-    if (!history.length || isGameOver || isWalking) return;
+// Trước đây là booster "Đi Lại" (undo bước vừa đi) — bỏ vì lệch logic: nếu người
+// chơi vừa GIẪM TRÚNG bẫy thì isGameOver đã true, undo() bị chặn ngay dòng đầu,
+// không cứu được gì cả (chỉ hữu ích lúc còn sống, tự lùi 1 bước AN TOÀN, không
+// liên quan gì tới việc vừa thua) — dễ gây hiểu lầm là "undo được cả cái chết".
+// Đổi hẳn thành booster MỞ NGẪU NHIÊN 1 BẪY còn ẩn trên bàn cờ (tháo ngòi luôn,
+// giống ô bẫy sau khi hồi sinh — xem performRevive()) để né được thật, đúng vai
+// trò 1 "cứu cánh" hữu ích. Giữ nguyên biến/khoá lưu trữ (undoCount, undo-badge,
+// UNDO_COUNT_KEY, boosterShopType 'undo'...) để không phải migrate dữ liệu đã lưu.
+// free = true: lượt dùng thử MIỄN PHÍ khi vừa mở khoá (xem processNextUnlockPopup()),
+// không trừ vào số lượt undoCount đang có của người chơi.
+function revealRandomBomb(free) {
+    if (isGameOver || isWalking) return;
     if (tutorialActive) { nudgeTutorialGuide(); return; }
-    if (undoCount <= 0) { openBoosterShop('undo'); return; }
-    undoCount--;
-    saveBoosterCounts();
-    updateBoosterBadges();
-    const last = history.pop();
-    grid = last.grid;
-    playerPos = last.playerPos;
-    lastMoveTime = Date.now();
-    updateStatus('Mèo quay lại bước trước...');
+    if (!free && !bombUnlocked) {
+        updateStatus(`🔒 Chơi tới Level ${BOMB_UNLOCK_LEVEL_IDX + 1} sẽ mở khoá Soi Bẫy nhé!`, '#ff5964');
+        return;
+    }
+    if (!free && undoCount <= 0) { openBoosterShop('undo'); return; }
+
+    const candidates = [];
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            const cell = grid[r][c];
+            if (cell.type === 'B' && !cell.revealed && !cell.flagged) candidates.push({ r, c });
+        }
+    }
+    if (!candidates.length) {
+        updateStatus('🤔 Không còn bẫy nào để soi nữa, yên tâm đi tiếp thôi!', '#2a9d8f');
+        return;
+    }
+
+    if (!free) {
+        undoCount--;
+        saveBoosterCounts();
+        updateBoosterBadges();
+    }
+
+    const { r, c } = candidates[Math.floor(Math.random() * candidates.length)];
+    grid[r][c].revealed = true;
+    grid[r][c].defused = true; // tháo ngòi luôn -> mèo đi ngang qua vẫn an toàn, không chỉ để "biết vị trí"
+    pendingReveals.push({ r, c });
+    updateStatus('💣 Mở ra 1 bẫy ngẫu nhiên rồi, đã tháo ngòi nên đi ngang qua vẫn an toàn nhé!', '#ff5964');
     render();
-    triggerSquashAnimation();
 }
 
 // =============================================================================
@@ -2127,9 +2594,13 @@ function cheatGoToLevel() {
     const select = document.getElementById('cheat-level-select');
     const idx = parseInt(select.value, 10);
     if (!LEVELS.length || isNaN(idx) || idx < 0 || idx >= LEVELS.length) return;
-    // Cheat nhảy tới level nào thì coi như đã qua hết các level TRƯỚC đó (không tính
-    // idx là đã qua) — để quay về Home thấy đúng level vừa nhảy tới là level hiện tại,
-    // không bị đẩy lùi về level cũ theo tiến trình thật.
+    // Cheat nhảy tới level nào thì ĐẶT LẠI HOÀN TOÀN tiến trình cho khớp đúng level
+    // đó: 0..idx-1 coi như đã qua, từ idx trở đi CHƯA qua — để quay về Home thấy
+    // đúng level vừa nhảy tới. Phải xoá sạch rồi gán lại từ đầu (không chỉ .add()
+    // thêm) — nếu không, nhảy LÙI về level nhỏ hơn sẽ không "reset" được: các level
+    // lớn hơn từng cheat-test/qua trước đó vẫn còn nằm trong completedLevels (set
+    // này chỉ cộng dồn, không tự xoá), khiến Home vẫn hiện level cũ lớn hơn.
+    completedLevels = new Set();
     for (let i = 0; i < idx; i++) completedLevels.add(i);
     saveProgress();
     hideCheatMenu();
@@ -2205,17 +2676,72 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
     });
 }
 
+// Mọi nút UI bấm được (nút thường, icon tròn, nút đóng popup, khối chọn level)
+// — dùng chung cho cả 2 cơ chế bên dưới: hiệu ứng lõm khi giữ tay, VÀ độ trễ
+// trước khi hành động thật sự chạy.
+const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-level-display';
+
+// Hiệu ứng "lõm xuống" khi bấm nút — không chỉ dựa vào :active CSS thuần (không
+// đáng tin cậy trên vài WebView Android, nhất là nút vừa hiện trong popup) mà tự
+// toggle class .btn-pressed song song, y hệt bài học từ .pressing của ô bàn cờ
+// (attachCellPressHandlers()). Gắn trên document (event delegation) nên tự động
+// bắt luôn cả nút tạo động trong popup thắng/thua (showResultModal()).
+function attachButtonPressFeedback() {
+    const press = (e) => {
+        const btn = e.target.closest(PRESSABLE_SELECTOR);
+        if (btn) btn.classList.add('btn-pressed');
+    };
+    const release = () => {
+        document.querySelectorAll('.btn-pressed').forEach(b => b.classList.remove('btn-pressed'));
+    };
+    document.addEventListener('touchstart', press, { passive: true });
+    document.addEventListener('touchend', release, { passive: true });
+    document.addEventListener('touchcancel', release, { passive: true });
+    document.addEventListener('mousedown', press);
+    document.addEventListener('mouseup', release);
+}
+
+// Chặn CHUNG mọi cú bấm nút UI, đợi đúng bằng thời lượng hiệu ứng lõm-rồi-nổi-lên
+// (CLICK_DELAY_MS, khớp transition 0.1s của .btn-piffle + chút dư) rồi mới thật
+// sự cho hành động (onclick) chạy — để người chơi luôn kịp THẤY nút trở về trạng
+// thái ban đầu trước khi màn hình/trạng thái đổi theo, thay vì bị cắt cụt hiệu
+// ứng như khi hành động chạy ngay lập tức. Dùng capturing phase để chặn được
+// TRƯỚC khi sự kiện chạm tới onclick của chính phần tử, rồi "phát lại" đúng 1
+// lần bằng .click() sau khi hết giờ — cờ trong `replaying` để lần phát lại đó
+// không bị chính cơ chế này chặn tiếp (không thì lặp vô hạn).
+const CLICK_DELAY_MS = 150;
+const replayingClicks = new WeakSet();
+
+function attachButtonClickDelay() {
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest(PRESSABLE_SELECTOR);
+        if (!btn || btn.disabled) return;
+        if (replayingClicks.has(btn)) { replayingClicks.delete(btn); return; } // lần phát lại -> cho qua bình thường
+
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        setTimeout(() => {
+            replayingClicks.add(btn);
+            btn.click();
+        }, CLICK_DELAY_MS);
+    }, true); // true = capturing phase, chặn trước khi tới onclick của phần tử
+}
+
 (async () => {
     loadDarkMode(); // áp trước tiên, tránh nháy nền sáng rồi mới tối lại
     showScreen('loading');
     await loadLevels();
     loadCoins();
     loadBoosterCounts();
+    loadBoosterUnlockState();
     loadProgress();
     renderHomeScreen();
     showScreen('home');
     maybeShowTutorialOnFirstVisit();
     attachCheatMenuTrigger();
+    attachButtonPressFeedback();
+    attachButtonClickDelay();
     initAds(); // không await — banner load nền, không được làm chậm màn Home
 })();
   

@@ -23,9 +23,13 @@
     <div id="screen-loading" class="screen">
       <div class="loading-content">
         <div class="header">
-          <h1>CAT'S YARN</h1>
+          <h1 class="wave-title">
+            <span style="animation-delay:0.00s">C</span><span style="animation-delay:0.05s">A</span><span style="animation-delay:0.10s">T</span><span style="animation-delay:0.15s">'</span><span style="animation-delay:0.20s">S</span><span class="wave-space" style="animation-delay:0.25s">&nbsp;</span><span style="animation-delay:0.30s">Y</span><span style="animation-delay:0.35s">A</span><span style="animation-delay:0.40s">R</span><span style="animation-delay:0.45s">N</span>
+          </h1>
         </div>
-        <div class="loading-spinner"></div>
+        <div class="loading-bar-track">
+          <div class="loading-bar-fill" id="loading-bar-fill"></div>
+        </div>
         <p class="loading-text">Đang tải...</p>
       </div>
     </div>
@@ -70,6 +74,7 @@
           </div>
         </div>
         <div id="status" class="status-banner">Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾</div>
+        <button class="btn-piffle" id="neighbor-highlight-btn" onclick="toggleNeighborHighlight()">🔦 Soi Quanh</button>
       </div>
 
       <div class="screen-middle" id="board-area">
@@ -82,7 +87,7 @@
 
       <div class="screen-bottom">
         <div class="controls">
-          <button class="btn-piffle btn-yellow" onclick="undo()">↩️ Lại<span class="booster-badge" id="undo-badge">3</span></button>
+          <button class="btn-piffle btn-yellow" id="bomb-reveal-btn" onclick="revealRandomBomb()">💣 Soi Bẫy<span class="booster-badge" id="undo-badge">3</span></button>
           <button class="btn-piffle btn-blue" id="hint-btn" onclick="useHint()">💡 Gợi Ý<span class="booster-badge" id="hint-badge">3</span></button>
         </div>
       </div>
@@ -182,7 +187,7 @@
         <button class="btn-piffle btn-yellow" onclick="cheatAddCoins()">🪙 +9999 Xu</button>
       </div>
       <div class="cheat-row">
-        <button class="btn-piffle btn-blue" onclick="cheatRefillBoosters()">♾️ Đầy Gợi Ý / Lại</button>
+        <button class="btn-piffle btn-blue" onclick="cheatRefillBoosters()">♾️ Đầy Gợi Ý / Soi Bẫy</button>
       </div>
       <div class="cheat-row">
         <button class="btn-piffle btn-pink" id="cheat-toggle-traps-btn" onclick="cheatToggleShowTraps()">👁️ Hiện Bẫy: TẮT</button>
@@ -248,6 +253,21 @@
     </div>
   </div>
 
+  <!-- Popup giới thiệu booster vừa mở khoá (Gợi Ý ở Level 5, Soi Bẫy ở Level 9) —
+       chỉ hiện đúng 1 lần lúc vừa chạm mốc unlock, nút hành động vừa đóng popup vừa
+       DÙNG THỬ MIỄN PHÍ luôn (không trừ số lượt) để người chơi biết ngay công dụng
+       (xem maybeUnlockBooster()/showBoosterUnlockPopup() trong script.js). -->
+  <div id="booster-unlock-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-icon" id="booster-unlock-icon">💡</div>
+      <h2 class="modal-title" style="color:#4a3022;" id="booster-unlock-title">Mở Khoá Rồi!</h2>
+      <p class="modal-message" id="booster-unlock-message"></p>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" id="booster-unlock-btn">Dùng thử ngay! 🎯</button>
+      </div>
+    </div>
+  </div>
+
   <div id="tutorial-spotlight"></div>
 
   <div id="tutorial-hand">👇</div>
@@ -258,6 +278,14 @@
     <span class="tutorial-bar-text"></span>
     <button id="tutorial-continue-btn" onclick="advanceTutorial()">Tiếp tục ▶</button>
   </div>
+
+  <!-- Gợi ý ngắn gọn (không phải tutorial dắt từng bước) cho vài màn đầu, ví dụ
+       nhắc "các ô cạnh Start luôn an toàn" ở Level 2 — tự ẩn khi mèo bước đi. -->
+  <div id="level-hint-bar" class="tutorial-bar level-hint-bar">
+    <span class="tutorial-bar-text"></span>
+  </div>
+
+  <div id="level-hint-hand">👉</div>
 
   <script src="ads.js"></script>
   <script src="script.js"></script>
