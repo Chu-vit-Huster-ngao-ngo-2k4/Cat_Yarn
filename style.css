@@ -161,12 +161,17 @@
       position: relative;
     }
 
-    /* Khoảng trống cố định ở đáy màn hình thật, chừa sẵn cho banner ads sau này */
+    /* Khoảng trống cố định ở đáy màn hình thật, chừa sẵn cho banner ads. AdMob banner
+       thật (ads.js, adSize: 'ADAPTIVE_BANNER') là 1 lớp NATIVE đè lên trên WebView ở
+       BOTTOM_CENTER, không nằm trong layout HTML này — placeholder chỉ ước lượng chỗ
+       trống để nội dung (bàn cờ, nút booster) không bị banner thật che khuất. Banner
+       thích ứng có thể cao hơn 50px khá nhiều tuỳ bề rộng máy -> chừa dư hẳn 90px cho
+       an toàn, đẩy #app (bàn cờ + nút booster) lên cao hơn hẳn khỏi vùng banner. */
     #ad-placeholder {
       width: 100%;
       max-width: 480px;
       flex-shrink: 0;
-      height: calc(50px + env(safe-area-inset-bottom, 0px));
+      height: calc(90px + env(safe-area-inset-bottom, 0px));
       padding-bottom: env(safe-area-inset-bottom, 0px);
       display: flex;
       align-items: center;
@@ -413,9 +418,14 @@
       border-radius: 32px;
       box-shadow: 0 8px 0 var(--btn-yellow-shadow);
       cursor: pointer;
+      transition: all 0.1s ease; /* thiếu dòng này -> lún/nổi tức thì, không mượt như .btn-piffle */
     }
 
-    .home-level-display:active {
+    /* .btn-pressed = JS tự toggle qua attachButtonPressFeedback() (script.js) — cần
+       thiết vì :active thuần không đáng tin trên vài WebView Android, y hệt lý do
+       các nút .btn-piffle đã dùng cơ chế này (xem style.css dòng ~1198). */
+    .home-level-display:active,
+    .home-level-display.btn-pressed {
       transform: translateY(6px);
       box-shadow: 0 2px 0 var(--btn-yellow-shadow);
     }
@@ -727,6 +737,36 @@
       box-shadow: 0 5px 0 #e0a940 !important;
     }
 
+    /* Cờ vừa cắm: bung ra kèm hơi xoay lố 1 chút rồi ổn định (giống cắm phập xuống
+       đất), thay vì hiện ra khô khan. CHỈ gắn ở class .flag-icon-pop riêng (KHÔNG
+       phải .flag-icon gốc) — vì render() vẽ lại TOÀN BỘ bàn cờ mỗi lần mèo bước
+       (xoá/tạo lại DOM mọi ô, kể cả ô đã cắm cờ từ trước), nếu để animation nằm
+       ngay trên .flag-icon thì mọi cờ ĐÃ cắm sẵn cũng bị "cắm lại" từ đầu mỗi lần
+       render — chỉ toggleFlag() (đúng lúc cắm cờ MỚI) mới tự thêm class này, xem
+       script.js. */
+    @keyframes flag-plant {
+      0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+      65% { transform: scale(1.18) rotate(8deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    .flag-icon.flag-icon-pop {
+      animation: flag-plant 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: 32% 55%;
+    }
+
+    /* Phần vải cờ phất phơ liên tục cho sinh động, cột cờ (đường thẳng bên cạnh)
+       đứng yên vì đó là vật cứng — chỉ nghiêng phần vải quanh mép gắn vào cột. */
+    @keyframes flag-wave {
+      0%, 100% { transform: skewY(0deg); }
+      50% { transform: skewY(6deg); }
+    }
+
+    .flag-cloth {
+      animation: flag-wave 1.3s ease-in-out infinite;
+      transform-origin: 25% 35%;
+    }
+
     /* Ô an toàn đã mở */
     .cell.revealed-safe {
       background-color: #fffdf5 !important;
@@ -818,6 +858,17 @@
       border-color: #ffffff !important;
     }
 
+    /* Level THƯỜNG (không có cơ chế tìm màu) — ô cá trước đây chỉ là ô .revealed-safe
+       trắng trơn như mọi ô số, không có gì khác biệt ngoài icon cá. Tô nền vàng ấm
+       (khớp --btn-yellow, không cần thêm biến CSS mới) + viền trắng + hiệu ứng viền
+       sáng nhấp nháy y hệt ô cá cần tìm màu (dùng chung ::after/keyframes bên dưới)
+       để ô cá luôn nổi bật rõ, kể cả level không có cơ chế màu. */
+    .cell.fish-cell-plain {
+      background-color: var(--btn-yellow) !important;
+      box-shadow: 0 5px 0 var(--btn-yellow-shadow) !important;
+      border-color: #ffffff !important;
+    }
+
     /* Viền sáng nhấp nháy nhẹ BÊN TRONG ô cá cho thật nổi bật, khác hẳn ô bình
        thường — dùng ::after RIÊNG (không phải box-shadow trên .cell) vì
        .color-cell-tinted ở trên đã set box-shadow !important, animate trực tiếp
@@ -833,7 +884,8 @@
        animation mới luôn "vào giữa" đúng chỗ nó lẽ ra đang ở, tạo cảm giác liền mạch. */
     .cell.color-cell-tinted::after,
     .cell.color-cell-tinted-2::after,
-    .cell.color-cell-split::after {
+    .cell.color-cell-split::after,
+    .cell.fish-cell-plain::after {
       content: '';
       position: absolute;
       inset: 3px;
@@ -846,6 +898,23 @@
     @keyframes color-cell-glow {
       0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0.8); }
       50% { box-shadow: inset 0 0 10px 3px rgba(255, 255, 255, 0.85); }
+    }
+
+    /* Ô cá "lồi lên lồi xuống" 1 nhịp ngay lúc mèo vừa nhảy vào ăn được cá (gắn class
+       này qua JS trong revealAndMove(), xem fish-cell-bump ở script.js) — phóng to
+       rồi hơi lõm xuống rồi mới về đúng kích thước gốc, cho cảm giác nảy lên thật sự
+       thay vì chỉ phóng to phẳng lì. Không dùng fill-mode "both"/"forwards" để sau
+       khi chạy xong tự trả về scale(1) mặc định của .cell, không cần dọn lại gì. */
+    @keyframes fish-cell-bump {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.32); }
+      55% { transform: scale(0.92); }
+      75% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    .cell.fish-cell-bump {
+      animation: fish-cell-bump 1s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     /* Cat Player Animation */
@@ -863,7 +932,7 @@
       pointer-events: none;
       animation: piffle-idle 2s infinite ease-in-out;
       transition: left 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
-        fill 0.4s ease;
+        fill 0.4s ease, opacity 0.25s ease;
     }
 
     /* Mèo "nhuộm màu" sau khi tìm thấy đốm màu giấu trong màn (cơ chế mèo-tìm-màu-
@@ -1285,6 +1354,7 @@
       pointer-events: auto;
     }
 
+
     .modal-card {
       background: var(--bg-cream);
       border: 4px solid var(--cacao);
@@ -1498,7 +1568,7 @@
     .cheat-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 8px;
       margin: 10px 0;
       flex-wrap: wrap;
@@ -1511,7 +1581,7 @@
       color: var(--cacao);
     }
 
-    #cheat-level-select {
+    #cheat-level-input {
       font-family: 'Fredoka', cursive, sans-serif;
       font-size: 0.95rem;
       font-weight: 600;
@@ -1520,6 +1590,10 @@
       border: 2px solid var(--cacao);
       background: #fff;
       color: var(--cacao);
+      /* Nhập số trực tiếp thay vì cuộn dropdown — lúc lên 100-200 level dropdown sẽ
+         rất khó lướt. Bề rộng cố định vừa đủ vài chữ số, không cần rộng như dropdown
+         cũ (vốn phải chứa hết chữ "Level N"). */
+      width: 72px;
     }
 
     /* O bay bi lo qua cheat "Hien Bay" — chi la lop phu ngoai, khong dung vao
@@ -1630,6 +1704,28 @@
 
     .settings-toggle.dark-active .dark-icon-off {
       display: block;
+    }
+
+    /* Nút đổi ngôn ngữ — cùng kích thước/dáng tròn với 2 nút loa/tối bên cạnh, chỉ
+       khác là hiện chữ (VI/EN) thay vì icon, vì chưa có sẵn icon cờ quốc gia. */
+    .lang-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 3px solid var(--cacao);
+      background: var(--bg-cream);
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--cacao);
+      box-sizing: border-box;
+    }
+
+    .settings-toggle:active .lang-icon {
+      transform: scale(0.92);
     }
 
     /* Khung hướng dẫn chơi lần đầu */

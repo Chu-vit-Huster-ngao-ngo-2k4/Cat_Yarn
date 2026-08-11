@@ -9,6 +9,7 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Cat's Yarn - Né Bẫy Tìm Cá 🐱💣</title>
   <link rel="stylesheet" href="style.css">
+  <script src="locales.js"></script>
 </head>
 
 <body>
@@ -30,7 +31,7 @@
         <div class="loading-bar-track">
           <div class="loading-bar-fill" id="loading-bar-fill"></div>
         </div>
-        <p class="loading-text">Đang tải...</p>
+        <p class="loading-text" data-i18n="loading_text">Đang tải...</p>
       </div>
     </div>
 
@@ -42,21 +43,21 @@
             <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
           </div>
           <div class="topbar-side topbar-side-right topbar-icons">
-            <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+            <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt" data-i18n-title="home_settings_title"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
           </div>
         </div>
       </div>
 
       <div class="screen-middle">
         <div class="home-level-display" onclick="playCurrentLevel()" title="Bấm để chơi">
-          <div class="home-level-label">Level</div>
+          <div class="home-level-label" data-i18n="home_level_label">Level</div>
           <div class="home-level-number" id="home-level-number">1</div>
         </div>
-        <button class="btn-piffle btn-green home-play-btn" onclick="playCurrentLevel()">▶ Chơi</button>
+        <button class="btn-piffle btn-green home-play-btn" onclick="playCurrentLevel()" data-i18n="home_play_btn">▶ Chơi</button>
       </div>
 
       <div class="screen-bottom">
-        <button class="btn-piffle btn-blue" onclick="showTutorial()">📖 Cách Chơi</button>
+        <button class="btn-piffle btn-blue" onclick="showTutorial()" data-i18n="home_howto_btn">📖 Cách Chơi</button>
       </div>
     </div>
 
@@ -65,16 +66,16 @@
       <div class="screen-top">
         <div class="game-topbar">
           <div class="topbar-side topbar-side-left">
-            <button class="icon-btn" onclick="goHome()" title="Về trang chủ">←</button>
+            <button class="icon-btn" onclick="goHome()" title="Về trang chủ" data-i18n-title="game_back_title">←</button>
           </div>
           <div class="level-badge" id="level-title">Level 1</div>
           <div class="topbar-side topbar-side-right topbar-icons">
-            <button class="icon-btn" onclick="showTutorial()" title="Cách chơi">❓</button>
-            <button class="icon-btn" onclick="showSettings()" title="Cài đặt"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
+            <button class="icon-btn" onclick="showTutorial()" title="Cách chơi" data-i18n-title="game_howto_title">❓</button>
+            <button class="icon-btn" onclick="showSettings()" title="Cài đặt" data-i18n-title="game_settings_title"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
           </div>
         </div>
         <div id="status" class="status-banner">Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾</div>
-        <button class="btn-piffle" id="neighbor-highlight-btn" onclick="toggleNeighborHighlight()">🔦 Soi Quanh</button>
+        <button class="btn-piffle" id="neighbor-highlight-btn" onclick="toggleNeighborHighlight()" data-i18n="neighbor_highlight_btn">🔦 Soi Quanh</button>
       </div>
 
       <div class="screen-middle" id="board-area">
@@ -87,8 +88,8 @@
 
       <div class="screen-bottom">
         <div class="controls">
-          <button class="btn-piffle btn-yellow" id="bomb-reveal-btn" onclick="revealRandomBomb()">💣 Soi Bẫy<span class="booster-badge" id="undo-badge">3</span></button>
-          <button class="btn-piffle btn-blue" id="hint-btn" onclick="useHint()">💡 Gợi Ý<span class="booster-badge" id="hint-badge">3</span></button>
+          <button class="btn-piffle btn-yellow" id="bomb-reveal-btn" onclick="revealRandomBomb()"><span data-i18n="bomb_reveal_btn">💣 Soi Bẫy</span><span class="booster-badge" id="undo-badge">3</span></button>
+          <button class="btn-piffle btn-blue" id="hint-btn" onclick="useHint()"><span data-i18n="hint_btn">💡 Gợi Ý</span><span class="booster-badge" id="hint-badge">3</span></button>
         </div>
       </div>
     </div>
@@ -96,7 +97,7 @@
   </div>
 
   <!-- Khoảng trống đáy màn hình, chừa sẵn cho banner ads sau này -->
-  <div id="ad-placeholder">Quảng cáo</div>
+  <div id="ad-placeholder" data-i18n="ad_placeholder">Quảng cáo</div>
 
   <div id="result-modal" class="modal-overlay">
     <div class="modal-card" id="modal-card">
@@ -110,20 +111,23 @@
 
   <div id="settings-modal" class="modal-overlay">
     <div class="modal-card modal-card-closable">
-      <button class="modal-close-btn" onclick="hideSettings()" title="Đóng">×</button>
-      <h2 class="modal-title" id="game-settings-title" style="color:#4a3022;">Cài Đặt</h2>
+      <button class="modal-close-btn" onclick="hideSettings()" title="Đóng" data-i18n-title="settings_close_title">×</button>
+      <h2 class="modal-title" id="game-settings-title" style="color:#4a3022;" data-i18n="settings_title">Cài Đặt</h2>
       <div class="settings-row">
-        <button class="settings-toggle" id="settings-sound-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
+        <button class="settings-toggle" id="settings-sound-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh" data-i18n-title="settings_sound_title">
           <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
           <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
         </button>
-        <button class="settings-toggle" id="settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối">
+        <button class="settings-toggle" id="settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối" data-i18n-title="settings_dark_title">
           <span class="dark-icon dark-icon-on">☀️</span>
           <span class="dark-icon dark-icon-off">🌙</span>
         </button>
+        <button class="settings-toggle" id="settings-lang-toggle" onclick="toggleLanguage()" title="Đổi ngôn ngữ" data-i18n-title="settings_lang_title">
+          <span class="lang-icon" id="settings-lang-label">EN</span>
+        </button>
       </div>
       <div class="settings-row">
-        <button class="btn-piffle btn-pink" onclick="replayFromSettings()">🔄 Chơi Lại</button>
+        <button class="btn-piffle btn-pink" onclick="replayFromSettings()" data-i18n="settings_replay_btn">Chơi Lại</button>
       </div>
     </div>
   </div>
@@ -132,39 +136,42 @@
        Nhạc (chưa làm, để chỗ sẵn) + Privacy Policy + Liên hệ. -->
   <div id="home-settings-modal" class="modal-overlay">
     <div class="modal-card modal-card-closable">
-      <button class="modal-close-btn" onclick="hideHomeSettings()" title="Đóng">×</button>
+      <button class="modal-close-btn" onclick="hideHomeSettings()" title="Đóng" data-i18n-title="settings_close_title">×</button>
       <div class="modal-icon"><img class="modal-icon-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></div>
-      <h2 class="modal-title" style="color:#4a3022;">Cài Đặt</h2>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="settings_title">Cài Đặt</h2>
       <div class="settings-row">
-        <button class="settings-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh">
+        <button class="settings-toggle" onclick="toggleAudio()" title="Bật/tắt âm thanh" data-i18n-title="settings_sound_title">
           <img class="sound-icon sound-icon-on" src="icon/Sound%20ON%20Outline%2064px.png" alt="Âm thanh bật">
           <img class="sound-icon sound-icon-off" src="icon/Sound%20OFF%20Outline%2064px.png" alt="Âm thanh tắt">
         </button>
-        <button class="settings-toggle" id="home-settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối">
+        <button class="settings-toggle" id="home-settings-dark-toggle" onclick="toggleDarkMode()" title="Bật/tắt giao diện tối" data-i18n-title="settings_dark_title">
           <span class="dark-icon dark-icon-on">☀️</span>
           <span class="dark-icon dark-icon-off">🌙</span>
+        </button>
+        <button class="settings-toggle" id="home-settings-lang-toggle" onclick="toggleLanguage()" title="Đổi ngôn ngữ" data-i18n-title="settings_lang_title">
+          <span class="lang-icon" id="home-settings-lang-label">EN</span>
         </button>
       </div>
       <div class="settings-row settings-row-soon">
         <span class="settings-soon-icon">🎵</span>
-        <span class="settings-soon-label">Nhạc nền — sắp có</span>
+        <span class="settings-soon-label" data-i18n="settings_music_soon">Nhạc nền — sắp có</span>
       </div>
       <div class="settings-links">
-        <a class="settings-link-btn" href="https://chu-vit-huster-ngao-ngo-2k4.github.io/Cat_Yarn/privacy-policy.html" target="_blank" rel="noopener">🔒 Chính Sách Quyền Riêng Tư</a>
-        <a class="settings-link-btn" href="mailto:buivanbinh1310@gmail.com">✉️ Liên Hệ</a>
+        <a class="settings-link-btn" href="https://chu-vit-huster-ngao-ngo-2k4.github.io/Cat_Yarn/privacy-policy.html" target="_blank" rel="noopener" data-i18n="settings_privacy_link">🔒 Chính Sách Quyền Riêng Tư</a>
+        <a class="settings-link-btn" href="mailto:buivanbinh1310@gmail.com" data-i18n="settings_contact_link">✉️ Liên Hệ</a>
       </div>
     </div>
   </div>
 
   <div id="booster-shop-modal" class="modal-overlay">
     <div class="modal-card modal-card-closable">
-      <button class="modal-close-btn" onclick="hideBoosterShop()" title="Đóng">×</button>
+      <button class="modal-close-btn" onclick="hideBoosterShop()" title="Đóng" data-i18n-title="settings_close_title">×</button>
       <div class="modal-icon" id="booster-shop-icon">💡</div>
-      <h2 class="modal-title" id="booster-shop-title" style="color:#4a3022;">Hết Rồi!</h2>
-      <p class="modal-message" id="booster-shop-message">Mua thêm để dùng tiếp nhé!</p>
+      <h2 class="modal-title" id="booster-shop-title" style="color:#4a3022;" data-i18n="booster_shop_default_title">Hết Rồi!</h2>
+      <p class="modal-message" id="booster-shop-message" data-i18n="booster_shop_default_message">Mua thêm để dùng tiếp nhé!</p>
       <div class="modal-actions">
-        <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)">🪙 Mua (100)</button>
-        <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)">📺 Xem QC</button>
+        <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)" data-i18n="booster_shop_buy_coins_btn">🪙 Mua (100)</button>
+        <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)" data-i18n="booster_shop_buy_ad_btn">📺 Xem QC</button>
       </div>
     </div>
   </div>
@@ -173,11 +180,11 @@
        (xem attachCheatMenuTrigger() trong script.js), người chơi thường không đụng phải. -->
   <div id="cheat-modal" class="modal-overlay">
     <div class="modal-card modal-card-closable">
-      <button class="modal-close-btn" onclick="hideCheatMenu()" title="Đóng">×</button>
+      <button class="modal-close-btn" onclick="hideCheatMenu()" title="Đóng" data-i18n-title="settings_close_title">×</button>
       <h2 class="modal-title" style="color:#4a3022;">Dev Cheat</h2>
       <div class="cheat-row">
-        <label for="cheat-level-select">Nhảy tới level:</label>
-        <select id="cheat-level-select"></select>
+        <label for="cheat-level-input">Nhảy tới level:</label>
+        <input type="number" id="cheat-level-input" min="1" step="1" inputmode="numeric">
         <button class="btn-piffle btn-blue" onclick="cheatGoToLevel()">▶ Đi</button>
       </div>
       <div class="cheat-row">
@@ -198,31 +205,31 @@
   <div id="tutorial-modal" class="modal-overlay">
     <div class="modal-card tutorial-card">
       <div class="modal-icon">📖</div>
-      <h2 class="modal-title" style="color:#2a9d8f;">Cách Chơi</h2>
+      <h2 class="modal-title" style="color:#2a9d8f;" data-i18n="tutorial_title">Cách Chơi</h2>
       <div class="tutorial-tips">
         <div class="tip-row">
           <span class="tip-icon">🐾</span>
-          <span class="tip-text">Chạm ô kề bên (hoặc bấm phím mũi tên) để mèo bước tới.</span>
+          <span class="tip-text" data-i18n="tutorial_tip_move">Chạm ô kề bên (hoặc bấm phím mũi tên) để mèo bước tới.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">🔢</span>
-          <span class="tip-text">Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.</span>
+          <span class="tip-text" data-i18n="tutorial_tip_number">Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">💣</span>
-          <span class="tip-text">Bước trúng ô có bẫy là thua ngay, phải bấm Replay chơi lại từ đầu.</span>
+          <span class="tip-text" data-i18n="tutorial_tip_trap">Bước trúng ô có bẫy là thua ngay, phải bấm Replay chơi lại từ đầu.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">🚩</span>
-          <span class="tip-text">Giữ ngón tay (hoặc chuột phải) trên 1 ô nghi có bẫy để cắm cờ, tránh bấm nhầm.</span>
+          <span class="tip-text" data-i18n="tutorial_tip_flag">Giữ ngón tay (hoặc chuột phải) trên 1 ô nghi có bẫy để cắm cờ, tránh bấm nhầm.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">🐟</span>
-          <span class="tip-text">Dẫn mèo tới đĩa cá để qua màn!</span>
+          <span class="tip-text" data-i18n="tutorial_tip_fish">Dẫn mèo tới đĩa cá để qua màn!</span>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-piffle btn-green" onclick="closeTutorialModal()">Bắt đầu tập chơi! 👆</button>
+        <button class="btn-piffle btn-green" onclick="closeTutorialModal()" data-i18n="tutorial_start_btn">Bắt đầu tập chơi! 👆</button>
       </div>
     </div>
   </div>
@@ -232,23 +239,23 @@
   <div id="color-tutorial-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-icon">🎨</div>
-      <h2 class="modal-title" style="color:#4a3022;">Bí Mật Màu Sắc!</h2>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="color_tutorial_title">Bí Mật Màu Sắc!</h2>
       <div class="tutorial-tips">
         <div class="tip-row">
           <span class="tip-icon">🎨</span>
-          <span class="tip-text">Từ màn này, có 1-2 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.</span>
+          <span class="tip-text" data-i18n="color_tutorial_tip_hidden">Từ màn này, có 1-2 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">🐟</span>
-          <span class="tip-text">Con cá đã có sẵn (các) màu cần tìm — nhìn màu cá là biết cần tìm màu gì. Có 2 màu thì mèo sẽ nhuộm nửa thân mỗi màu khi tìm được.</span>
+          <span class="tip-text" data-i18n="color_tutorial_tip_fish">Con cá đã có sẵn màu cần tìm — nhìn màu cá là biết cần tìm màu gì.</span>
         </div>
         <div class="tip-row">
           <span class="tip-icon">🔒</span>
-          <span class="tip-text">Chưa tìm ĐỦ màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!</span>
+          <span class="tip-text" data-i18n="color_tutorial_tip_locked">Chưa tìm ĐỦ màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!</span>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-piffle btn-green" onclick="hideColorTutorial()">Đã hiểu! 🐱</button>
+        <button class="btn-piffle btn-green" onclick="hideColorTutorial()" data-i18n="color_tutorial_btn">Đã hiểu! 🐱</button>
       </div>
     </div>
   </div>
@@ -263,7 +270,7 @@
       <h2 class="modal-title" style="color:#4a3022;" id="booster-unlock-title">Mở Khoá Rồi!</h2>
       <p class="modal-message" id="booster-unlock-message"></p>
       <div class="modal-actions">
-        <button class="btn-piffle btn-green" id="booster-unlock-btn">Dùng thử ngay! 🎯</button>
+        <button class="btn-piffle btn-green" id="booster-unlock-btn" data-i18n="booster_unlock_btn">Dùng thử ngay!</button>
       </div>
     </div>
   </div>
@@ -276,7 +283,7 @@
 
   <div id="tutorial-bar" class="tutorial-bar">
     <span class="tutorial-bar-text"></span>
-    <button id="tutorial-continue-btn" onclick="advanceTutorial()">Tiếp tục ▶</button>
+    <button id="tutorial-continue-btn" onclick="advanceTutorial()" data-i18n="tutorial_continue_btn">Tiếp tục</button>
   </div>
 
   <!-- Gợi ý ngắn gọn (không phải tutorial dắt từng bước) cho vài màn đầu, ví dụ

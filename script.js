@@ -13,6 +13,7 @@ function initAudio() {
 // File nhạc chiến thắng có sẵn trong project — dùng thay cho pháo hoa tự tổng hợp.
 const victorySound = new Audio('sfx/victory.mp3');
 victorySound.preload = 'auto';
+victorySound.volume = 0.6; // file gốc nghe to quá so với các SFX tự tổng hợp khác
 
 // UI trên/dưới (top bar, status, nút bấm) giữ nguyên kích thước thật, không co giãn
 // theo màn hình — chỉ vùng bàn cờ ở giữa mới tự co giãn để vừa khoảng trống còn lại
@@ -31,7 +32,12 @@ function fitBoardToSpace() {
 
     const availW = boardArea.clientWidth - 12;
     const availH = boardArea.clientHeight - 12;
-    const scale = Math.min(1, availW / naturalW, availH / naturalH);
+    // Trước đây luôn chặn ở tối đa 1 (chỉ được thu nhỏ, không bao giờ phóng to) ->
+    // level nhỏ (4x4, 5x5...) hoặc màn hình cao thừa nhiều khoảng trống dọc sẽ để
+    // bàn cờ nằm bé tí, lọt thỏm co cụm giữa màn hình trông "thấp"/trống trải. Cho
+    // phép phóng to vượt quá 1 khi còn dư chỗ, chặn ở 1.4 để không quá to/vỡ nét
+    // trên grid rất nhỏ hoặc màn hình rất cao (tablet).
+    const scale = Math.min(1.4, availW / naturalW, availH / naturalH);
 
     board.style.transform = `scale(${scale})`;
     boardOuter.style.width = Math.round(naturalW * scale) + 'px';
@@ -43,6 +49,58 @@ window.addEventListener('load', fitBoardToSpace);
 function toggleAudio() {
     soundEnabled = !soundEnabled;
     updateSoundToggleUI();
+}
+
+// =============================================================================
+// ĐA NGÔN NGỮ — chuỗi dịch nằm ở tools/locale.csv, build ra locales.js (biến
+// global LOCALES) bằng `python tools/build_locales.py`. Đổi/thêm chuỗi thì sửa
+// CSV rồi chạy lại lệnh đó, KHÔNG sửa tay locales.js (bị ghi đè mất công dịch).
+// =============================================================================
+const LANG_KEY = 'catYarnLang';
+let currentLang = 'en'; // mặc định ban đầu (chưa từng đổi/lưu gì) là tiếng Anh
+
+function loadLang() {
+    try { currentLang = localStorage.getItem(LANG_KEY) || 'en'; } catch (e) { currentLang = 'en'; }
+}
+
+// Tra chuỗi theo ngôn ngữ đang chọn — rơi về tiếng Việt nếu ngôn ngữ đó thiếu key
+// (ví dụ vừa thêm ngôn ngữ mới nhưng chưa dịch hết), rồi rơi về chính cái key nếu
+// tiếng Việt cũng không có (lúc đó là bug — quên thêm vào locale.csv).
+// params (tuỳ chọn): thay các mốc "{tenBien}" trong chuỗi bằng giá trị tương ứng,
+// ví dụ t('status_hint_locked', { level: 5 }) thay "{level}" -> 5.
+function t(key, params) {
+    const table = (typeof LOCALES !== 'undefined' && LOCALES[currentLang]) || {};
+    let str = table[key] || (LOCALES.vi && LOCALES.vi[key]) || key;
+    if (params) {
+        for (const k in params) str = str.split('{' + k + '}').join(params[k]);
+    }
+    return str;
+}
+
+// Áp dụng ngôn ngữ hiện tại lên MỌI phần tử tĩnh có đánh dấu sẵn trong HTML
+// (data-i18n = nội dung chữ, data-i18n-title = thuộc tính title) — gọi 1 lần lúc
+// khởi động và mỗi lần đổi ngôn ngữ. Chữ được set ĐỘNG bằng JS (status lúc chơi,
+// tutorial từng bước, modal thắng/thua...) KHÔNG nằm trong sweep này, vẫn còn
+// tiếng Việt — sẽ làm sau ở đợt 2.
+function applyLocale() {
+    document.documentElement.lang = currentLang;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        el.title = t(el.dataset.i18nTitle);
+    });
+    document.querySelectorAll('.lang-icon').forEach(el => {
+        el.textContent = currentLang.toUpperCase();
+    });
+}
+
+function toggleLanguage() {
+    currentLang = currentLang === 'vi' ? 'en' : 'vi';
+    try { localStorage.setItem(LANG_KEY, currentLang); } catch (e) { /* bỏ qua nếu bị chặn */ }
+    applyLocale();
+    renderHomeScreen(); // nút Chơi/Tiếp Tục/Sắp Ra Mắt set chữ ĐỘNG, ngoài sweep của applyLocale() -> phải tự vẽ lại
+    if (typeof tutorialActive !== 'undefined' && tutorialActive) renderTutorialStep(); // bong bóng hướng dẫn đang hiện cũng là chữ động, cần vẽ lại tay
 }
 
 // Dùng chung cho cả nút loa trong settings-modal (màn chơi) lẫn home-settings-modal
@@ -113,6 +171,16 @@ document.getElementById('settings-modal').addEventListener('click', (e) => {
     if (e.target.id === 'settings-modal') hideSettings();
 });
 
+// Mỗi kiểu sóng (sine/triangle/square/sawtooth) tự thân nghe to/nhỏ khác nhau dù
+// cùng 1 mức gain số học (sóng vuông/răng cưa nhiều hoạ âm hơn nên nghe to hơn hẳn
+// sóng sine cùng biên độ) — dùng hệ số bù theo loại sóng để MỌI SFX quy về cùng 1
+// độ to cảm nhận, thay vì chỉnh gain cảm tính riêng lẻ từng tiếng như trước.
+const SFX_BASE_GAIN = 0.22;
+const SFX_WAVE_LOUDNESS = { sine: 1, triangle: 0.85, square: 0.65, sawtooth: 0.55 };
+function sfxGain(waveType) {
+    return SFX_BASE_GAIN * (SFX_WAVE_LOUDNESS[waveType] || 1);
+}
+
 function playSound(type) {
     if (!soundEnabled) return;
 
@@ -138,7 +206,7 @@ function playSound(type) {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(300, now);
         osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
-        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.setValueAtTime(sfxGain('sine'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
         osc.start(now);
         osc.stop(now + 0.1);
@@ -148,7 +216,7 @@ function playSound(type) {
         osc.type = 'square';
         osc.frequency.setValueAtTime(700, now);
         osc.frequency.exponentialRampToValueAtTime(1000, now + 0.06);
-        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.setValueAtTime(sfxGain('square'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.06);
         osc.start(now);
         osc.stop(now + 0.06);
@@ -160,7 +228,7 @@ function playSound(type) {
         osc.frequency.setValueAtTime(520, now);
         osc.frequency.setValueAtTime(700, now + 0.08);
         osc.frequency.setValueAtTime(950, now + 0.16);
-        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.setValueAtTime(sfxGain('sine'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.26);
         osc.start(now);
         osc.stop(now + 0.26);
@@ -173,7 +241,7 @@ function playSound(type) {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, now);
         osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.09);
-        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.setValueAtTime(sfxGain('triangle'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.09);
         osc.start(now);
         osc.stop(now + 0.09);
@@ -184,7 +252,7 @@ function playSound(type) {
         osc.frequency.setValueAtTime(500, now);
         osc.frequency.exponentialRampToValueAtTime(950, now + 0.07);
         osc.frequency.exponentialRampToValueAtTime(700, now + 0.16);
-        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.setValueAtTime(sfxGain('sine'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
         osc.start(now);
         osc.stop(now + 0.18);
@@ -194,7 +262,7 @@ function playSound(type) {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(180, now);
         osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
-        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.setValueAtTime(sfxGain('sawtooth'), now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
         osc.start(now);
         osc.stop(now + 0.3);
@@ -208,12 +276,59 @@ function playSound(type) {
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
         const noiseGain = audioCtx.createGain();
-        noiseGain.gain.setValueAtTime(0.3, now);
+        noiseGain.gain.setValueAtTime(sfxGain('sawtooth'), now);
         noiseGain.gain.linearRampToValueAtTime(0.01, now + 0.2);
         noise.connect(noiseGain);
         noiseGain.connect(audioCtx.destination);
         noise.start(now);
         noise.stop(now + 0.2);
+    }
+    else if (type === 'click') {
+        // Tiếng "póc" đơn giản, 1 nốt duy nhất tắt nhanh — khi chạm vào bất kỳ nút UI
+        // nào (xem attachButtonPressFeedback()), không lấn át các SFX gameplay khác.
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(900, now);
+        gain.gain.setValueAtTime(sfxGain('sine'), now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        osc.start(now);
+        osc.stop(now + 0.045);
+    }
+    else if (type === 'bubble') {
+        // Tiếng "lanh canh" nhẹ, cao — dùng lặp lại cho từng ô BUNG RA lúc vừa vào
+        // màn (loadLevel()), khác hẳn tiếng 'pop' trầm/nặng hơn lúc ăn mừng chiến
+        // thắng (ô NỔ biến mất). Cao độ ngẫu nhiên nhẹ để nhiều tiếng chồng nhau
+        // (cách nhau đúng 30ms theo stagger của tile-bubble-pop) nghe lấp lánh chứ
+        // không lặp y hệt nhau; gain giảm còn nửa mức chuẩn vì phát dồn dập liên tục.
+        const freq = 700 + Math.random() * 500;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.3, now + 0.05);
+        gain.gain.setValueAtTime(sfxGain('sine') * 0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        osc.start(now);
+        osc.stop(now + 0.07);
+    }
+    else if (type === 'eat') {
+        // Tiếng "meo meo" vui vẻ ngay lúc mèo cắn được cá — cao độ vút lên rồi hạ
+        // xuống (dáng kêu thật của mèo), lặp lại 2 tiếng ngắn liên tiếp. Tách biệt
+        // với nhạc chiến thắng (victory.mp3, phát trễ hơn lúc bàn cờ "nổ").
+        const meow = (startTime, baseFreq) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g);
+            g.connect(audioCtx.destination);
+            o.type = 'sine';
+            o.frequency.setValueAtTime(baseFreq, startTime);
+            o.frequency.exponentialRampToValueAtTime(baseFreq * 1.6, startTime + 0.08);
+            o.frequency.exponentialRampToValueAtTime(baseFreq * 1.15, startTime + 0.19);
+            g.gain.setValueAtTime(0.0001, startTime);
+            g.gain.exponentialRampToValueAtTime(sfxGain('sine'), startTime + 0.04);
+            g.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.2);
+            o.start(startTime);
+            o.stop(startTime + 0.2);
+        };
+        meow(now, 480);
+        meow(now + 0.22, 540);
     }
 }
 
@@ -609,10 +724,10 @@ function processNextUnlockPopup() {
     const type = pendingUnlockPopups.shift();
     const isHint = type === 'hint';
     document.getElementById('booster-unlock-icon').innerText = isHint ? '💡' : '💣';
-    document.getElementById('booster-unlock-title').innerText = isHint ? 'Mở Khoá "Gợi Ý"!' : 'Mở Khoá "Soi Bẫy"!';
+    document.getElementById('booster-unlock-title').innerText = isHint ? t('unlock_hint_title') : t('unlock_bomb_title');
     document.getElementById('booster-unlock-message').innerText = isHint
-        ? 'Bí đường quá thì bấm nút này, mèo sẽ chỉ luôn 1 ô AN TOÀN gần nhất để bước tới!'
-        : 'Nghi ngờ ô nào cũng có thể là bẫy? Bấm nút này để mở đại 1 bẫy ngẫu nhiên (đã tháo ngòi sẵn, đi ngang qua vẫn an toàn)!';
+        ? t('unlock_hint_message')
+        : t('unlock_bomb_message');
     const btn = document.getElementById('booster-unlock-btn');
     btn.onclick = () => {
         document.getElementById('booster-unlock-modal').classList.remove('show');
@@ -629,14 +744,14 @@ function openBoosterShop(type) {
     boosterShopType = type;
     const isHint = type === 'hint';
     document.getElementById('booster-shop-icon').innerText = isHint ? '💡' : '💣';
-    document.getElementById('booster-shop-title').innerText = isHint ? 'Hết Gợi Ý Rồi!' : 'Hết Lượt Soi Bẫy Rồi!';
-    document.getElementById('booster-shop-message').innerText = 'Mua thêm để dùng tiếp nhé!';
+    document.getElementById('booster-shop-title').innerText = isHint ? t('booster_shop_title_hint') : t('booster_shop_title_bomb');
+    document.getElementById('booster-shop-message').innerText = t('booster_shop_default_message');
     const coinBtn = document.querySelector('#booster-shop-modal .btn-blue');
     const adBtn = document.querySelector('#booster-shop-modal .btn-green');
     coinBtn.disabled = false;
-    coinBtn.innerText = `🪙 Mua (${BOOSTER_BUY_COST})`;
+    coinBtn.innerText = t('shop_buy_coins_btn', { cost: BOOSTER_BUY_COST });
     adBtn.disabled = false;
-    adBtn.innerText = '📺 Xem QC';
+    adBtn.innerText = t('booster_shop_buy_ad_btn');
     document.getElementById('booster-shop-modal').classList.add('show');
 }
 
@@ -658,7 +773,7 @@ function grantBooster(type, qty) {
 function buyBoosterWithCoins(btn) {
     if (!boosterShopType) return;
     if (coins < BOOSTER_BUY_COST) {
-        btn.innerText = '🪙 Không đủ xu!';
+        btn.innerText = t('action_no_coins');
         return;
     }
     coins -= BOOSTER_BUY_COST;
@@ -674,7 +789,7 @@ function buyBoosterWithAd(btn) {
     if (!boosterShopType) return;
     const type = boosterShopType;
     btn.disabled = true;
-    btn.innerText = '⏳ Đang tải quảng cáo...';
+    btn.innerText = t('action_loading_ad');
     showRewardedAd(
         () => {
             grantBooster(type, BOOSTER_BUY_QTY);
@@ -682,7 +797,7 @@ function buyBoosterWithAd(btn) {
         },
         () => {
             btn.disabled = false;
-            btn.innerText = '❌ Không có QC, thử lại';
+            btn.innerText = t('action_no_ad_retry');
         }
     );
 }
@@ -853,13 +968,13 @@ function useHint(free) {
     if (isGameOver || isWalking) return;
     if (tutorialActive) { nudgeTutorialGuide(); return; }
     if (!free && !hintUnlocked) {
-        updateStatus(`🔒 Chơi tới Level ${HINT_UNLOCK_LEVEL_IDX + 1} sẽ mở khoá Gợi Ý nhé!`, '#ff5964');
+        updateStatus(t('status_hint_locked', { level: HINT_UNLOCK_LEVEL_IDX + 1 }), '#ff5964');
         return;
     }
     if (!free && hintCount <= 0) { openBoosterShop('hint'); return; }
     const target = findHintCell();
     if (!target) {
-        updateStatus('🤔 Chưa đủ manh mối để gợi ý, khám phá thêm chút nữa nhé!');
+        updateStatus(t('status_hint_no_clue'));
         return;
     }
     if (!free) {
@@ -867,7 +982,7 @@ function useHint(free) {
         saveBoosterCounts();
         updateBoosterBadges();
     }
-    updateStatus('💡 Ô đang nhấp nháy an toàn đó, thử bước tới xem!', '#1982c4');
+    updateStatus(t('status_hint_shown'), '#1982c4');
 
     const el = document.querySelector(`[data-row="${target.r}"][data-col="${target.c}"]`);
     if (el) {
@@ -896,7 +1011,7 @@ function performRevive(r, c) {
     isGameOver = false;
     hideResultModal();
     catEl.classList.remove('expr-dizzy');
-    updateStatus('😺 Mèo hồi sinh rồi! Cẩn thận hơn nhé!', '#2a9d8f');
+    updateStatus(t('status_revived'), '#2a9d8f');
     render();
 }
 
@@ -904,7 +1019,7 @@ function performRevive(r, c) {
 // phỏng tạm bằng 1 khoảng chờ ngắn để sẵn khung, chỉ cần cắm SDK thật vào chỗ này.
 function watchAdForRevive(r, c, myGeneration, btn) {
     btn.disabled = true;
-    btn.innerText = '⏳ Đang tải quảng cáo...';
+    btn.innerText = t('action_loading_ad');
     showRewardedAd(
         () => {
             if (myGeneration !== levelGeneration) return; // đã Replay/thoát giữa lúc xem quảng cáo
@@ -912,7 +1027,7 @@ function watchAdForRevive(r, c, myGeneration, btn) {
         },
         () => {
             btn.disabled = false;
-            btn.innerText = '❌ Không có quảng cáo, thử lại';
+            btn.innerText = t('action_no_ad_retry_full');
         }
     );
 }
@@ -1003,10 +1118,10 @@ function renderHomeScreen() {
 
     const playBtn = document.querySelector('.home-play-btn');
     if (areAllLevelsCompleted()) {
-        playBtn.textContent = '🔜 Sắp Ra Mắt';
+        playBtn.textContent = t('home_coming_soon');
         playBtn.disabled = true;
     } else {
-        playBtn.textContent = hasInProgressLevel() ? '🔄 Tiếp Tục' : '▶ Chơi';
+        playBtn.textContent = hasInProgressLevel() ? t('home_play_btn_continue') : t('home_play_btn');
         playBtn.disabled = false;
     }
     updateCoinDisplay();
@@ -1163,17 +1278,17 @@ function loadLevel(idx, tryResume) {
         usedReviveThisLevel = !!resume.usedReviveThisLevel;
     }
 
-    document.getElementById('level-title').innerText = `Level ${currentLevelIdx + 1}`;
+    document.getElementById('level-title').innerText = t('level_title', { n: currentLevelIdx + 1 });
     // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
     // đỡ để người chơi tự dò tới tận ô cá mới biết cần tìm gì.
     levelNeedsColor1 = grid.some(row => row.some(cell => cell.hasColor));
     levelNeedsColor2 = grid.some(row => row.some(cell => cell.hasColor2));
     updateStatus(
         (levelNeedsColor1 && levelNeedsColor2)
-            ? '🎨 Cá cần ĐỦ 2 màu đó! Tìm 2 đốm màu giống 2 nửa màu cá rồi hẵng tới ăn nhé!'
+            ? t('status_level_start_dual_color')
             : (levelNeedsColor1 || levelNeedsColor2)
-                ? '🎨 Cá đang chờ đúng màu đó! Tìm đốm màu giống màu cá rồi hẵng tới ăn nhé!'
-                : 'Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾 (giữ ô để cắm cờ)');
+                ? t('status_level_start_single_color')
+                : t('status_level_start_normal'));
     hideResultModal();
 
     // Hiệu ứng "bubble": tất cả các ô bung ra lần lượt theo thứ tự khi vừa vào màn, cho
@@ -1186,6 +1301,19 @@ function loadLevel(idx, tryResume) {
     pendingBubbleLoad = true;
     render(true);
     pendingBubbleLoad = false;
+
+    // Rải tiếng "lanh canh" (xem playSound('bubble')) đúng nhịp từng ô bung ra
+    // (30ms/ô, khớp stagger của .tile-bubble-pop trong render()) — chỉ phát cách 1
+    // ô (idx chẵn) để đỡ dồn dập với bàn cờ lớn (9x9 = 81 ô); huỷ nếu lỡ Replay/đổi
+    // màn giữa lúc animation còn dở dang.
+    const myBubbleGeneration = levelGeneration;
+    bubbleOrder.forEach((_, idx) => {
+        if (idx % 2 !== 0) return;
+        setTimeout(() => {
+            if (myBubbleGeneration !== levelGeneration) return;
+            playSound('bubble');
+        }, idx * 30);
+    });
 
     // Vừa khôi phục tiến trình -> đã tìm màu từ trước rồi thì tô lại mèo NGAY (không
     // đợi "tìm thấy" mới tô, vì onColorFound() chỉ chạy đúng lúc VỪA mở trúng ô màu —
@@ -1255,8 +1383,7 @@ function showNeighborBtnHint() {
     hand.classList.add('show', 'point-right');
 
     const bar = document.getElementById('level-hint-bar');
-    bar.querySelector('.tutorial-bar-text').textContent =
-        'Thử bấm nút này xem sao!';
+    bar.querySelector('.tutorial-bar-text').textContent = t('hint_bar_neighbor_btn');
     bar.classList.toggle('below', rect.top < 170);
     bar.style.top = rect.top < 170 ? (rect.bottom + 16) + 'px' : (rect.top - 16) + 'px';
     bar.classList.add('show'); // phải add('show') TRƯỚC khi đo offsetWidth (display:none thì width luôn = 0)
@@ -1291,8 +1418,7 @@ function showStartSafeHint() {
     });
 
     const bar = document.getElementById('level-hint-bar');
-    bar.querySelector('.tutorial-bar-text').textContent =
-        `💡 Mẹo: ${cells.length} ô khoanh xanh sát ô xuất phát LUÔN an toàn!`;
+    bar.querySelector('.tutorial-bar-text').textContent = t('hint_bar_start_safe', { count: cells.length });
     const boardRect = document.getElementById('cells-layer').getBoundingClientRect();
     const pad = 10;
     const placeBelow = boardRect.top < 170;
@@ -1440,48 +1566,52 @@ document.getElementById('color-tutorial-modal').addEventListener('click', (e) =>
 //   (2,4)=1, quanh nó chỉ còn đúng 1 ô chưa mở (3,4)  -> (3,4) chắc chắn có bẫy
 //   (3,3)=1, bẫy đó đã tính vào ô (3,4) rồi            -> (4,2)/(4,3) an toàn
 // =============================================================================
+// msgKey (không phải chuỗi chữ trực tiếp) — tra qua t() ngay lúc HIỂN THỊ từng
+// bước (renderTutorialStep()), vì mảng này chỉ được tạo 1 LẦN lúc script.js chạy
+// (còn quá sớm để biết đúng currentLang, và đổi ngôn ngữ giữa chừng cũng không
+// cập nhật lại được nếu bake sẵn chuỗi ở đây).
 const TUTORIAL_STEPS = [
     { action: 'move', target: { r: 0, c: 1 }, clue: null,
-      msg: 'Chạm vào ô có bàn tay 👇 chỉ để mèo bước tới nhé!' },
+      msgKey: 'tutorial_step_1' },
 
     { action: 'click', target: null, clue: null,
-      msg: 'Cả một vùng vừa mở ra! Số trên mỗi ô = số bẫy đang ẩn ở ĐÚNG 8 ô sát nó. Cùng xem ví dụ thật để đoán ra bẫy nhé!' },
+      msgKey: 'tutorial_step_2' },
 
     { action: 'move', target: { r: 1, c: 2 }, clue: null,
-      msg: 'Chạm vào ô số 1 này để mèo đứng lên đó nhé, đứng lên sẽ soi rõ 8 ô xung quanh luôn!' },
+      msgKey: 'tutorial_step_3' },
 
     { action: 'click', target: { r: 2, c: 1 }, clue: { r: 1, c: 2 }, danger: true,
-      msg: 'Ô CAM (chỗ em vừa đứng) ghi số 1 = quanh nó có đúng 1 bẫy. Nhìn 8 ô sáng xanh quanh mèo xem — chỉ còn DUY NHẤT 1 ô chưa mở (khoanh đỏ) — vậy chắc chắn ô đó có bẫy!' },
+      msgKey: 'tutorial_step_4' },
 
     { action: 'flag', target: { r: 2, c: 1 }, clue: { r: 1, c: 2 }, danger: true,
-      msg: 'Giữ ngón tay lên ô khoanh đỏ (hoặc chuột phải trên máy tính) để cắm cờ 🚩 đánh dấu bẫy vừa đoán ra!' },
+      msgKey: 'tutorial_step_5' },
 
     { action: 'move', target: { r: 2, c: 2 }, clue: null,
-      msg: 'Chạm vào ô số 1 này để mèo đứng lên đó, suy luận tiếp nhé!' },
+      msgKey: 'tutorial_step_6' },
 
     { action: 'click', target: { r: 3, c: 3 }, clue: { r: 2, c: 2 },
-      msg: 'Ô CAM (chỗ em vừa đứng) cũng ghi số 1 — mà bẫy đó chính là ô em vừa cắm cờ rồi! Vậy 3 ô trống còn lại quanh nó (kể cả ô khoanh xanh) đều AN TOÀN.' },
+      msgKey: 'tutorial_step_7' },
 
     { action: 'move', target: { r: 3, c: 3 }, clue: { r: 2, c: 2 },
-      msg: 'Chạm vào ô khoanh xanh đó nhé, an toàn 100% rồi!' },
+      msgKey: 'tutorial_step_8' },
 
     { action: 'move', target: { r: 2, c: 4 }, clue: null,
-      msg: 'Chạm vào ô số 1 này để mèo đứng lên soi tiếp nhé!' },
+      msgKey: 'tutorial_step_9' },
 
     { action: 'click', target: { r: 3, c: 4 }, clue: { r: 2, c: 4 }, danger: true,
-      msg: 'Y hệt lúc nãy: ô CAM (chỗ em vừa đứng) ghi số 1 và chỉ còn đúng 1 ô chưa mở (khoanh đỏ) — chắc chắn có bẫy ở đó, né xa ô này ra nhé!' },
+      msgKey: 'tutorial_step_10' },
 
     { action: 'move', target: { r: 3, c: 3 }, clue: null,
-      msg: 'Quay lại ô này 1 chút để soi nốt lần cuối nhé!' },
+      msgKey: 'tutorial_step_11' },
 
     { action: 'click', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
-      msg: 'Ô CAM (chỗ em đang đứng) ghi số 1 — bẫy đó chính là ô đỏ lúc nãy rồi. Vậy ô khoanh xanh này chắc chắn AN TOÀN!' },
+      msgKey: 'tutorial_step_12' },
 
     { action: 'move', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
-      msg: 'Chạm vào ô khoanh xanh nhé!' },
+      msgKey: 'tutorial_step_13' },
 
     { action: 'move', target: { r: 4, c: 4 }, clue: null,
-      msg: 'Cuối cùng, dẫn mèo tới đĩa cá 🐟 để chiến thắng nhé!' }
+      msgKey: 'tutorial_step_14' }
 ];
 
 let tutorialActive = false;
@@ -1523,7 +1653,7 @@ function advanceTutorial() {
 function renderTutorialStep() {
     const step = TUTORIAL_STEPS[tutorialStep];
     const bar = document.getElementById('tutorial-bar');
-    bar.querySelector('.tutorial-bar-text').textContent = step.msg;
+    bar.querySelector('.tutorial-bar-text').textContent = t(step.msgKey);
     document.getElementById('tutorial-continue-btn').style.display = (step.action === 'click') ? 'inline-flex' : 'none';
     bar.classList.add('show');
     positionTutorialUI();
@@ -1683,7 +1813,8 @@ function render(instant) {
                 if (levelNeedsColor1 && levelNeedsColor2) el.classList.add('color-cell-split');
                 else if (levelNeedsColor1) el.classList.add('color-cell-tinted');
                 else if (levelNeedsColor2) el.classList.add('color-cell-tinted-2');
-                if (levelNeedsColor1 || levelNeedsColor2) setColorGlowDelay(el);
+                else el.classList.add('fish-cell-plain'); // level thường (không cần tìm màu) -> vẫn cho ô cá nổi bật nhẹ, không để trắng trơn như ô số
+                setColorGlowDelay(el);
                 contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
             } else {
                 el.classList.add('revealed-safe');
@@ -1727,8 +1858,18 @@ function render(instant) {
         }
     }
 
+    // Lúc mới vào màn (pendingBubbleLoad), ô nó đứng lên cũng bung theo đúng thứ tự
+    // loang như mọi ô khác -> nếu để mèo hiện NGAY LẬP TỨC (như trước) thì nó lộ ra
+    // trước cả khi ô của nó kịp bung, trông như "mèo tự dưng có sẵn trên nền trống".
+    // Tính đúng độ trễ (khớp stagger 30ms của tile-bubble-pop) rồi truyền cho
+    // updateCatPosition() để mèo chỉ hiện ra SAU khi ô nó đứng đã bung xong.
+    let catBubbleDelay = null;
+    if (pendingBubbleLoad) {
+        const idx = revealOrder.get(playerPos.r + ',' + playerPos.c);
+        if (idx !== undefined) catBubbleDelay = idx * 30;
+    }
     pendingReveals = [];
-    updateCatPosition(instant);
+    updateCatPosition(instant, catBubbleDelay);
     applyTutorialHighlights();
     applyNeighborHighlight();
     positionTutorialUI();
@@ -1773,12 +1914,12 @@ const NUM_COLORS = {
 
 // Dùng chung cho cả render() và toggleFlag() (cập nhật tại chỗ không render lại cả bàn).
 const FLAG_ICON_HTML = `
-    <svg viewBox="0 0 40 40" style="width:26px; height:26px;">
+    <svg class="flag-icon" viewBox="0 0 40 40" style="width:45px; height:45px;">
         <line x1="10" y1="6" x2="10" y2="34" stroke="#4a3022" stroke-width="4" stroke-linecap="round"/>
-        <path d="M 10 8 L 32 14 L 10 20 Z" fill="#ff5964" stroke="#4a3022" stroke-width="3" stroke-linejoin="round"/>
+        <path class="flag-cloth" d="M 10 8 L 32 14 L 10 20 Z" fill="#ff5964" stroke="#4a3022" stroke-width="3" stroke-linejoin="round"/>
     </svg>`;
 
-function updateCatPosition(instant) {
+function updateCatPosition(instant, bubbleDelayMs) {
     if (!catEl) {
         catEl = document.createElement('div');
         catEl.classList.add('cat-player');
@@ -1842,13 +1983,21 @@ function updateCatPosition(instant) {
 
     if (instant) {
         catEl.style.transition = 'none';
+        if (bubbleDelayMs !== null && bubbleDelayMs !== undefined) catEl.style.opacity = '0';
         catEl.style.left = x + 'px';
         catEl.style.top = y + 'px';
         void catEl.offsetWidth;
         catEl.style.transition = '';
+        if (bubbleDelayMs !== null && bubbleDelayMs !== undefined) {
+            // Chờ đúng lúc ô nó đứng bung xong (xem render()) rồi mới cho mèo hiện ra.
+            setTimeout(() => { catEl.style.opacity = '1'; }, bubbleDelayMs);
+        } else {
+            catEl.style.opacity = '1';
+        }
         catIsMoving = false; // vào màn mới/tức thì -> không tính là "đang di chuyển"
         clearTimeout(catMoveSettleTimer);
     } else {
+        catEl.style.opacity = '1'; // phòng khi còn đang chờ hiện ra dở (bubbleDelayMs) từ lượt trước
         catEl.style.left = x + 'px';
         catEl.style.top = y + 'px';
         // Chỉ HẸN GIỜ tắt catIsMoving ở đây thôi — việc BẬT (catIsMoving = true) phải
@@ -1920,7 +2069,15 @@ function toggleFlag(r, c, el) {
         el.classList.toggle('flagged', cell.flagged);
         el.classList.toggle('hidden-tile', !cell.flagged);
         const inner = el.querySelector('.cell-inner');
-        if (inner) inner.innerHTML = cell.flagged ? FLAG_ICON_HTML : '';
+        if (inner) {
+            inner.innerHTML = cell.flagged ? FLAG_ICON_HTML : '';
+            // Chỉ lúc này (vừa thật sự CẮM cờ mới) mới cho bung/xoay, xem lý do ở
+            // .flag-icon-pop trong style.css.
+            if (cell.flagged) {
+                const flagEl = inner.querySelector('.flag-icon');
+                if (flagEl) flagEl.classList.add('flag-icon-pop');
+            }
+        }
     } else {
         render();
     }
@@ -2050,10 +2207,18 @@ function walkPath(path, idx, myGeneration) {
 // Giữ ngón tay trên 1 ô ẩn để cắm/gỡ cờ (mobile), hoặc chuột phải (desktop) —
 // thay cho nút bật/tắt "chế độ đánh dấu" riêng, chỉ còn đúng 1 thao tác duy nhất.
 const LONG_PRESS_MS = 420;
+// Buông tay TRƯỚC mốc này -> chắc chắn là 1 cú CHẠM nhanh, cho đi/mở ô bình thường.
+// Buông tay SAU mốc này nhưng CHƯA đủ LONG_PRESS_MS -> rơi vào "vùng mập mờ": người
+// chơi nhiều khả năng đang cố GIỮ để cắm cờ nhưng buông hụt tay 1 chút, không phải
+// đang cố tap nhanh (tap thật thường rất ngắn, dưới mốc này). Coi khoảng này là cắm
+// cờ HỤT -> HUỶ LUÔN, không đi/mở ô, vì đi nhầm trúng bẫy nặng hơn nhiều so với việc
+// phải bấm lại. Không tự động cắm cờ luôn ở đây vì vẫn chưa đủ chắc chắn ý định.
+const TAP_MAX_MS = 180;
 const LONG_PRESS_MOVE_TOLERANCE = 12;
 let longPressTimer = null;
 let longPressFired = false;
 let pressStartX = 0, pressStartY = 0;
+let pressStartTime = 0;
 
 function attachCellPressHandlers(el, r, c) {
     const cancelLongPress = () => {
@@ -2067,6 +2232,7 @@ function attachCellPressHandlers(el, r, c) {
         const t = e.changedTouches[0];
         pressStartX = t.screenX;
         pressStartY = t.screenY;
+        pressStartTime = Date.now();
         longPressFired = false;
         cancelLongPress();
         if (!grid[r][c].revealed) el.classList.add('pressing');
@@ -2091,7 +2257,11 @@ function attachCellPressHandlers(el, r, c) {
         if (longPressFired) {
             // Chặn sự kiện click "ảo" phát sinh sau đó, tránh vừa cắm cờ vừa di chuyển.
             e.preventDefault();
+            return;
         }
+        // Giữ lâu hơn 1 cú tap thật nhưng chưa đủ để cắm cờ (xem TAP_MAX_MS ở trên)
+        // -> huỷ luôn, không cho 'click' chạy tiếp (không đi/mở ô).
+        if (Date.now() - pressStartTime > TAP_MAX_MS) e.preventDefault();
     });
 
     el.addEventListener('touchcancel', cancelLongPress);
@@ -2124,12 +2294,12 @@ function handleMoveInput(targetR, targetC) {
 
     const targetCell = grid[targetR][targetC];
     if (targetCell.flagged) {
-        updateStatus('🚩 Ô này đang cắm cờ! Gỡ cờ trước khi bước vào nhé!', '#ff5964');
+        updateStatus(t('status_flagged_blocked'), '#ff5964');
         return;
     }
 
     if (targetCell.type === 'E' && !allColorsFound()) {
-        updateStatus('🎨 Mèo cần tìm đủ màu trước khi ăn cá!', '#ff5964');
+        updateStatus(t('status_need_color'), '#ff5964');
         return;
     }
 
@@ -2202,9 +2372,9 @@ function onColorFound(r, c, which) {
     updateStatus(
         dual
             ? (allColorsFound()
-                ? '🎨 Mèo tìm đủ 2 màu rồi! Giờ ăn được cá!'
-                : '🎨 Mèo tìm được 1 nửa màu rồi! Còn nửa kia nữa mới ăn được cá!')
-            : '🎨 Mèo tìm thấy màu rồi! Giờ ăn được cá!',
+                ? t('status_color_dual_found_all')
+                : t('status_color_dual_found_half'))
+            : t('status_color_found_single'),
         '#8ac926');
     const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
     if (cellEl) {
@@ -2249,7 +2419,7 @@ function revealAndMove(r, c) {
         if (cell.defused) return; // đã hồi sinh qua đúng ô này rồi -> giờ an toàn, đi xuyên qua bình thường
 
         playSound('boom');
-        updateStatus('💥 Bụp! Mèo dính bẫy rồi! Bấm Replay để thử lại nhé!', '#ff5964');
+        updateStatus(t('status_boom'), '#ff5964');
         isGameOver = true;
         catEl.classList.add('expr-dizzy');
         setTimeout(() => {
@@ -2264,10 +2434,10 @@ function revealAndMove(r, c) {
             const actions = [];
             if (!usedReviveThisLevel) {
                 actions.push({
-                    cls: 'btn-blue', label: `🪙 Hồi Sinh (${REVIVE_COST})`, onClick: (btn) => {
+                    cls: 'btn-blue', label: t('action_revive_coins', { cost: REVIVE_COST }), onClick: (btn) => {
                         if (myGeneration !== levelGeneration) return;
                         if (coins < REVIVE_COST) {
-                            btn.innerText = '🪙 Không đủ xu!';
+                            btn.innerText = t('action_no_coins');
                             return;
                         }
                         coins -= REVIVE_COST;
@@ -2277,21 +2447,21 @@ function revealAndMove(r, c) {
                     }
                 });
                 actions.push({
-                    cls: 'btn-green', label: '📺 Hồi Sinh (xem QC)', onClick: (btn) => {
+                    cls: 'btn-green', label: t('action_revive_ad'), onClick: (btn) => {
                         if (myGeneration !== levelGeneration) return;
                         watchAdForRevive(r, c, myGeneration, btn);
                     }
                 });
             }
-            actions.push({ cls: 'btn-pink', label: '🔄 Thử Lại', onClick: () => loadLevel(currentLevelIdx) });
+            actions.push({ cls: 'btn-pink', label: t('action_retry'), onClick: () => loadLevel(currentLevelIdx) });
 
             showResultModal({
                 type: 'lose',
                 icon: '💥',
-                title: 'Bụp! Dính Bẫy Rồi!',
+                title: t('lose_title'),
                 message: usedReviveThisLevel
-                    ? 'Mèo cần cẩn thận hơn đó. Thử lại nhé!'
-                    : 'Mèo cần cẩn thận hơn đó. Hồi sinh để đi tiếp, hoặc thử lại từ đầu!',
+                    ? t('lose_message_used_revive')
+                    : t('lose_message_no_revive'),
                 actions
             });
         }, 650);
@@ -2302,7 +2472,8 @@ function revealAndMove(r, c) {
         const myGeneration = levelGeneration;
         // Nhạc chiến thắng (victory.mp3) KHÔNG phát ngay ở đây — dời vào lúc ô đầu
         // tiên bắt đầu nổ trong celebrateWinReveal(), để không bị "sớm" so với hiệu ứng.
-        updateStatus('😻 MỀM LÒNG! Mèo đã né hết bẫy và ăn được cá! 🎉', '#2a9d8f');
+        playSound('eat'); // tiếng cắn cá ngay lúc này, phân biệt với nhạc chiến thắng phát sau
+        updateStatus(t('status_win'), '#2a9d8f');
         isGameOver = true;
         catEl.classList.add('expr-happy');
 
@@ -2317,6 +2488,7 @@ function revealAndMove(r, c) {
             if (cellEl) {
                 const rect = cellEl.getBoundingClientRect();
                 triggerWinFX(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                cellEl.classList.add('fish-cell-bump'); // ô cá lồi lên/xuống 1 nhịp ngay lúc mèo vừa ăn được cá
             }
         }, 100);
 
@@ -2332,40 +2504,40 @@ function revealAndMove(r, c) {
                 let doubled = false;
                 const actions = [];
                 actions.push({
-                    cls: 'btn-blue', label: '📺 x2 Vàng', onClick: (btn) => {
+                    cls: 'btn-blue', label: t('action_double_gold'), onClick: (btn) => {
                         if (doubled || myGeneration !== levelGeneration) return;
                         btn.disabled = true;
-                        btn.innerText = '⏳ Đang tải quảng cáo...';
+                        btn.innerText = t('action_loading_ad');
                         showRewardedAd(
                             () => {
                                 if (myGeneration !== levelGeneration) return; // đã Replay/đổi màn giữa lúc xem quảng cáo
                                 doubled = true;
                                 awardCoins(reward);
                                 document.getElementById('modal-coin-amount').textContent = reward * 2;
-                                btn.innerText = '✅ Đã nhận x2!';
+                                btn.innerText = t('action_double_gold_done');
                             },
                             () => {
                                 btn.disabled = false;
-                                btn.innerText = '❌ Không có QC, thử lại';
+                                btn.innerText = t('action_no_ad_retry');
                             }
                         );
                     }
                 });
                 if (hasNextLevel) {
-                    actions.push({ cls: 'btn-green', label: '⏩ Màn Tiếp', onClick: () => nextLevel() });
+                    actions.push({ cls: 'btn-green', label: t('action_next_level'), onClick: () => nextLevel() });
                 } else {
                     // Màn cuối cùng, không còn "Màn Tiếp" -> vẫn cần 1 lối ra khỏi popup
                     // (result-modal không có nút đóng/tap-ra-ngoài riêng).
-                    actions.push({ cls: 'btn-green', label: '🏠 Về Trang Chủ', onClick: () => goHome() });
+                    actions.push({ cls: 'btn-green', label: t('action_go_home'), onClick: () => goHome() });
                 }
 
                 showResultModal({
                     type: 'win',
                     icon: hasNextLevel ? '😻' : '🏆',
-                    title: hasNextLevel ? 'Mềm Lòng!' : 'Xuất Sắc!',
+                    title: hasNextLevel ? t('win_title_next') : t('win_title_last'),
                     message: hasNextLevel
-                        ? 'Mèo đã né hết bẫy và ăn được cá! 🐟'
-                        : 'Mèo đã ăn hết cá ở mọi màn rồi! Quá đỉnh! 🎉',
+                        ? t('win_message_next')
+                        : t('win_message_last'),
                     actions,
                     coinReward: reward
                 });
@@ -2486,7 +2658,7 @@ function revealRandomBomb(free) {
     if (isGameOver || isWalking) return;
     if (tutorialActive) { nudgeTutorialGuide(); return; }
     if (!free && !bombUnlocked) {
-        updateStatus(`🔒 Chơi tới Level ${BOMB_UNLOCK_LEVEL_IDX + 1} sẽ mở khoá Soi Bẫy nhé!`, '#ff5964');
+        updateStatus(t('status_bomb_locked', { level: BOMB_UNLOCK_LEVEL_IDX + 1 }), '#ff5964');
         return;
     }
     if (!free && undoCount <= 0) { openBoosterShop('undo'); return; }
@@ -2499,7 +2671,7 @@ function revealRandomBomb(free) {
         }
     }
     if (!candidates.length) {
-        updateStatus('🤔 Không còn bẫy nào để soi nữa, yên tâm đi tiếp thôi!', '#2a9d8f');
+        updateStatus(t('status_bomb_none_left'), '#2a9d8f');
         return;
     }
 
@@ -2513,7 +2685,7 @@ function revealRandomBomb(free) {
     grid[r][c].revealed = true;
     grid[r][c].defused = true; // tháo ngòi luôn -> mèo đi ngang qua vẫn an toàn, không chỉ để "biết vị trí"
     pendingReveals.push({ r, c });
-    updateStatus('💣 Mở ra 1 bẫy ngẫu nhiên rồi, đã tháo ngòi nên đi ngang qua vẫn an toàn nhé!', '#ff5964');
+    updateStatus(t('status_bomb_revealed'), '#ff5964');
     render();
 }
 
@@ -2547,17 +2719,14 @@ function attachCheatMenuTrigger() {
     });
 }
 
-function populateCheatLevelSelect() {
-    const select = document.getElementById('cheat-level-select');
-    if (!select) return;
-    select.innerHTML = '';
-    for (let i = 0; i < LEVELS.length; i++) {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = `Level ${i + 1}`;
-        select.appendChild(opt);
-    }
-    select.value = currentLevelIdx;
+// Nhập số trực tiếp thay vì chọn dropdown — dropdown liệt kê hết mọi level sẽ rất
+// khó lướt khi lên tới 100-200 level. Chỉ cần ghim max = tổng số level hiện có +
+// điền sẵn level đang chơi, còn lại người dùng tự gõ số.
+function syncCheatLevelInput() {
+    const input = document.getElementById('cheat-level-input');
+    if (!input) return;
+    input.max = LEVELS.length;
+    input.value = currentLevelIdx + 1;
 }
 
 // Dò lại levels/levelNN.json ngay trong lúc game đang chạy (không cần tải lại trang) —
@@ -2567,7 +2736,7 @@ async function cheatRefreshLevels(btn) {
     btn.disabled = true;
     btn.innerText = '⏳ Đang dò...';
     await loadLevels();
-    populateCheatLevelSelect();
+    syncCheatLevelInput();
     renderHomeScreen();
     btn.innerText = `✅ Tìm thấy ${LEVELS.length} level!`;
     setTimeout(() => {
@@ -2576,10 +2745,19 @@ async function cheatRefreshLevels(btn) {
     }, 1500);
 }
 
+// Mốc thời gian vừa mở cheat menu — chặn tap-ra-ngoài-để-đóng trong 1 khoảng ngắn
+// ngay sau đó (xem CHEAT_MENU_CLOSE_GUARD_MS bên dưới), vì mở menu này cần bấm
+// LIÊN TIẾP 7 lần rất nhanh vào đúng 1 điểm trên màn hình -> lỡ tay bấm dư thêm
+// 1-2 cái sau lần thứ 7 (spam theo quán tính) sẽ rơi trúng ngay lớp nền cheat-modal
+// vừa hiện ra tại đúng vị trí đó, đóng menu lại ngay lập tức, phải mở lại từ đầu.
+let cheatMenuOpenedAt = 0;
+const CHEAT_MENU_CLOSE_GUARD_MS = 500;
+
 function openCheatMenu() {
-    populateCheatLevelSelect();
+    syncCheatLevelInput();
     document.getElementById('cheat-toggle-traps-btn').innerText = cheatShowTraps ? '👁️ Hiện Bẫy: BẬT' : '👁️ Hiện Bẫy: TẮT';
     document.getElementById('cheat-modal').classList.add('show');
+    cheatMenuOpenedAt = Date.now();
 }
 
 function hideCheatMenu() {
@@ -2587,12 +2765,14 @@ function hideCheatMenu() {
 }
 
 document.getElementById('cheat-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'cheat-modal') hideCheatMenu();
+    if (e.target.id !== 'cheat-modal') return;
+    if (Date.now() - cheatMenuOpenedAt < CHEAT_MENU_CLOSE_GUARD_MS) return; // vẫn còn tap dư từ lúc spam mở menu, bỏ qua
+    hideCheatMenu();
 });
 
 function cheatGoToLevel() {
-    const select = document.getElementById('cheat-level-select');
-    const idx = parseInt(select.value, 10);
+    const input = document.getElementById('cheat-level-input');
+    const idx = parseInt(input.value, 10) - 1; // input là số level 1-based (Level 1, 2, 3...), grid/mảng LEVELS dùng idx 0-based
     if (!LEVELS.length || isNaN(idx) || idx < 0 || idx >= LEVELS.length) return;
     // Cheat nhảy tới level nào thì ĐẶT LẠI HOÀN TOÀN tiến trình cho khớp đúng level
     // đó: 0..idx-1 coi như đã qua, từ idx trở đi CHƯA qua — để quay về Home thấy
@@ -2687,12 +2867,31 @@ const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-leve
 // (attachCellPressHandlers()). Gắn trên document (event delegation) nên tự động
 // bắt luôn cả nút tạo động trong popup thắng/thua (showResultModal()).
 function attachButtonPressFeedback() {
+    // Thiết bị cảm ứng vẫn tự phát sinh thêm 'mousedown' ngay sau 'touchstart' cho
+    // CÙNG 1 lần chạm -> nếu không chặn, mọi hiệu ứng/âm thanh trong press() chạy
+    // 2 LẦN mỗi cú bấm trên Android WebView. Ghi lại mốc touchstart gần nhất, bỏ
+    // qua mousedown nào tới ngay sau đó (khoảng cách quá ngắn để là chuột thật).
+    let lastTouchTime = 0;
     const press = (e) => {
+        if (e.type === 'touchstart') lastTouchTime = Date.now();
+        else if (e.type === 'mousedown' && Date.now() - lastTouchTime < 800) return;
         const btn = e.target.closest(PRESSABLE_SELECTOR);
-        if (btn) btn.classList.add('btn-pressed');
+        if (!btn || btn.disabled) return;
+        btn.classList.add('btn-pressed');
+        playSound('click');
     };
     const release = () => {
-        document.querySelectorAll('.btn-pressed').forEach(b => b.classList.remove('btn-pressed'));
+        document.querySelectorAll('.btn-pressed').forEach(b => {
+            // #neighbor-highlight-btn (Soi Quanh) lõm xuống thường trực khi BẬT (.active,
+            // xem style.css) — y hệt dáng .btn-pressed lúc đang giữ. Nếu vừa bấm để BẬT
+            // (chưa .active), thả tay ra bình thường sẽ nảy lên rồi 150ms sau (khi
+            // attachButtonClickDelay() phát lại click, xem bên dưới) mới lõm lại theo
+            // .active -> nhìn giật cục "lõm - nảy lên - lõm lại". Giữ nguyên .btn-pressed
+            // trong lúc chờ (không nảy lên) để tránh cú nảy thừa đó; lúc bấm để TẮT thì
+            // vẫn nảy lên bình thường vì đó đúng là hướng chuyển động cuối cùng.
+            if (b.id === 'neighbor-highlight-btn' && !b.classList.contains('active')) return;
+            b.classList.remove('btn-pressed');
+        });
     };
     document.addEventListener('touchstart', press, { passive: true });
     document.addEventListener('touchend', release, { passive: true });
@@ -2730,6 +2929,8 @@ function attachButtonClickDelay() {
 
 (async () => {
     loadDarkMode(); // áp trước tiên, tránh nháy nền sáng rồi mới tối lại
+    loadLang();
+    applyLocale(); // áp ngay cả trước khi vào Home, để màn Loading cũng hiện đúng ngôn ngữ
     showScreen('loading');
     await loadLevels();
     loadCoins();

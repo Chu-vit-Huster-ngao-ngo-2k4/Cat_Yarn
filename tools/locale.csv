@@ -1,0 +1,101 @@
+key,vi,en
+loading_text,Đang tải...,Loading...
+ad_placeholder,Quảng cáo,Advertisement
+home_level_label,Level,Level
+home_play_btn,▶ Chơi,▶ Play
+home_howto_btn,📖 Cách Chơi,📖 How To Play
+home_settings_title,Cài đặt,Settings
+game_back_title,Về trang chủ,Back to home
+game_howto_title,Cách chơi,How to play
+game_settings_title,Cài đặt,Settings
+neighbor_highlight_btn,🔦 Soi Quanh,🔦 Peek Around
+bomb_reveal_btn,💣 Soi Bẫy,💣 Reveal Trap
+hint_btn,💡 Gợi Ý,💡 Hint
+settings_title,Cài Đặt,Settings
+settings_sound_title,Bật/tắt âm thanh,Toggle sound
+settings_dark_title,Bật/tắt giao diện tối,Toggle dark mode
+settings_replay_btn,Chơi Lại,Replay
+settings_close_title,Đóng,Close
+settings_music_soon,Nhạc nền — sắp có,Background music — coming soon
+settings_privacy_link,🔒 Chính Sách Quyền Riêng Tư,🔒 Privacy Policy
+settings_contact_link,✉️ Liên Hệ,✉️ Contact
+settings_lang_title,Đổi ngôn ngữ,Change language
+booster_shop_default_title,Hết Rồi!,All Used Up!
+booster_shop_default_message,Mua thêm để dùng tiếp nhé!,Buy more to keep going!
+booster_shop_buy_coins_btn,🪙 Mua (100),🪙 Buy (100)
+booster_shop_buy_ad_btn,📺 Xem QC,📺 Watch Ad
+tutorial_title,Cách Chơi,How To Play
+tutorial_tip_move,Chạm ô kề bên để mèo bước tới.,Tap an adjacent cell to move the cat.
+tutorial_tip_number,Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.,The number on a cell = how many traps are hidden in its 8 surrounding cells — use it to figure out which cells are safe.
+tutorial_tip_trap,"Bước trúng ô có bẫy là thua ngay, phải bấm Replay chơi lại từ đầu.",Stepping on a trap means instant defeat — you'll need to hit Replay to start over.
+tutorial_tip_flag,"Giữ ngón tay trên 1 ô nghi có bẫy để cắm cờ.",Hold your finger on a cell you suspect has a trap to flag it.
+tutorial_tip_fish,Dẫn mèo tới đĩa cá để qua màn!,Lead the cat to the fish to clear the level!
+tutorial_start_btn,Bắt đầu tập chơi! 👆,Let's start playing! 👆
+color_tutorial_title,Bí Mật Màu Sắc!,Color Secret!
+color_tutorial_tip_hidden,"Từ màn này, có 1-2 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.","From this level on, 1-2 safe cells hide a color dot — reveal the right cell to find it."
+color_tutorial_tip_fish,Con cá đã có sẵn màu cần tìm — nhìn màu cá là biết cần tìm màu gì.,The fish already shows the color you need — just look at it to know what to find.
+color_tutorial_tip_locked,"Chưa tìm ĐỦ màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!",You can't reach the fish until you've found ALL the needed colors — good luck!
+color_tutorial_btn,Đã hiểu! 🐱,Got it! 🐱
+booster_unlock_btn,Dùng thử ngay!,Try it now!
+tutorial_continue_btn,Tiếp tục,Continue
+home_coming_soon,🔜 Sắp Ra Mắt,🔜 Coming Soon
+home_play_btn_continue,Tiếp Tục,Continue
+booster_shop_title_hint,Hết Gợi Ý Rồi!,Out of Hints!
+booster_shop_title_bomb,Hết Lượt Soi Bẫy Rồi!,Out of Trap Reveals!
+level_title,Level {n},Level {n}
+status_hint_locked,🔒 Chơi tới Level {level} sẽ mở khoá Gợi Ý nhé!,🔒 Reach Level {level} to unlock Hints!
+status_hint_no_clue,"🤔 Chưa đủ manh mối để gợi ý, khám phá thêm chút nữa nhé!","🤔 Not enough clues to give a hint yet, explore a bit more!"
+status_hint_shown,"💡 Ô đang nhấp nháy an toàn đó, thử bước tới xem!","💡 The blinking cell is safe, try stepping there!"
+status_revived,😺 Mèo hồi sinh rồi! Cẩn thận hơn nhé!,😺 The cat is back! Be more careful this time!
+status_level_start_dual_color,🎨 Cá cần ĐỦ 2 màu đó! Tìm 2 đốm màu giống 2 nửa màu cá rồi hẵng tới ăn nhé!,🎨 The fish needs BOTH colors! Find the 2 color dots matching the fish's two halves before eating it!
+status_level_start_single_color,🎨 Cá đang chờ đúng màu đó! Tìm đốm màu giống màu cá rồi hẵng tới ăn nhé!,🎨 The fish is waiting for the right color! Find the matching color dot before eating it!
+status_level_start_normal,Mèo đang đói... Né bẫy tìm đường tới cá thôi!🐾Giữ ô để cắm cờ.,The cat is hungry... Dodge the traps and find your way to the fish! Hold a cell to flag it.
+status_flagged_blocked,🚩 Ô này đang cắm cờ! Gỡ cờ trước khi bước vào nhé!,🚩 This cell is flagged! Remove the flag before stepping in!
+status_need_color,🎨 Mèo cần tìm đủ màu trước khi ăn cá!,🎨 The cat needs to find all the colors before eating the fish!
+status_color_dual_found_all,🎨 Mèo tìm đủ 2 màu rồi! Giờ ăn được cá!,🎨 The cat found both colors! It can eat the fish now!
+status_color_dual_found_half,🎨 Mèo tìm được 1 nửa màu rồi! Còn nửa kia nữa mới ăn được cá!,🎨 The cat found one color! It still needs the other half before eating the fish!
+status_color_found_single,🎨 Mèo tìm thấy màu rồi! Giờ ăn được cá!,🎨 The cat found the color! It can eat the fish now!
+status_boom,💥 Bụp! Mèo dính bẫy rồi! Bấm Replay để thử lại nhé!,💥 Boom! The cat hit a trap! Hit Replay to try again!
+status_win,😻 MỀM LÒNG! Mèo đã né hết bẫy và ăn được cá! 🎉,😻 AWESOME! The cat dodged every trap and ate the fish! 🎉
+status_bomb_locked,🔒 Chơi tới Level {level} sẽ mở khoá Soi Bẫy nhé!,🔒 Reach Level {level} to unlock Trap Reveal!
+status_bomb_none_left,"🤔 Không còn bẫy nào để soi nữa, yên tâm đi tiếp thôi!","🤔 No more traps left to reveal, safe to keep going!"
+status_bomb_revealed,"💣 Mở ra 1 bẫy ngẫu nhiên rồi, đã tháo ngòi nên đi ngang qua vẫn an toàn nhé!","💣 Revealed a random trap, it's defused so it's safe to walk past!"
+lose_title,Bụp! Dính Bẫy Rồi!,Boom! You Hit a Trap!
+lose_message_used_revive,Mèo cần cẩn thận hơn đó. Thử lại nhé!,The cat needs to be more careful. Try again!
+lose_message_no_revive,"Mèo cần cẩn thận hơn đó. Hồi sinh để đi tiếp, hoặc thử lại từ đầu!","The cat needs to be more careful. Revive to keep going, or try again from the start!"
+win_title_next,Mềm Lòng!,Nice One!
+win_title_last,Xuất Sắc!,Excellent!
+win_message_next,Mèo đã né hết bẫy và ăn được cá! 🐟,The cat dodged every trap and ate the fish! 🐟
+win_message_last,Mèo đã ăn hết cá ở mọi màn rồi! Quá đỉnh! 🎉,The cat has eaten the fish in every level! Amazing! 🎉
+action_revive_coins,🪙 Hồi Sinh ({cost}),🪙 Revive ({cost})
+action_no_coins,🪙 Không đủ xu!,🪙 Not enough coins!
+action_revive_ad,📺 Hồi Sinh (xem QC),📺 Revive (watch ad)
+action_retry,🔄 Thử Lại,🔄 Retry
+action_double_gold,📺 x2 Vàng,📺 x2 Gold
+action_loading_ad,⏳ Đang tải quảng cáo...,⏳ Loading ad...
+action_double_gold_done,✅ Đã nhận x2!,✅ x2 received!
+action_no_ad_retry,"❌ Không có QC, thử lại","❌ No ad available, try again"
+action_no_ad_retry_full,"❌ Không có quảng cáo, thử lại","❌ No ad available, try again"
+action_next_level,⏩ Màn Tiếp,⏩ Next Level
+action_go_home,🏠 Về Trang Chủ,🏠 Go Home
+shop_buy_coins_btn,🪙 Mua ({cost}),🪙 Buy ({cost})
+unlock_hint_title,"Mở Khoá ""Gợi Ý""!","Unlocked ""Hint""!"
+unlock_bomb_title,"Mở Khoá ""Soi Bẫy""!","Unlocked ""Trap Reveal""!"
+unlock_hint_message,"Bí đường quá thì bấm nút này, mèo sẽ chỉ luôn 1 ô AN TOÀN gần nhất để bước tới!",Stuck? Tap this button and the cat will point to the nearest SAFE cell to step on!
+unlock_bomb_message,"Nghi ngờ ô nào cũng có thể là bẫy? Bấm nút này để mở đại 1 bẫy ngẫu nhiên (đã tháo ngòi sẵn, đi ngang qua vẫn an toàn)!","Suspect every cell might be a trap? Tap this button to reveal a random trap (already defused, safe to walk past)!"
+hint_bar_neighbor_btn,Thử bấm nút này xem sao!,Try tapping this button!
+hint_bar_start_safe,💡 Mẹo: {count} ô khoanh xanh sát ô xuất phát LUÔN an toàn!,💡 Tip: the {count} highlighted cells next to the start are ALWAYS safe!
+tutorial_step_1,Chạm vào ô có bàn tay 👇 chỉ để mèo bước tới nhé!,Tap the cell the hand 👇 is pointing at to move the cat!
+tutorial_step_2,Cả một vùng vừa mở ra! Số trên mỗi ô = số bẫy đang ẩn ở ĐÚNG 8 ô sát nó. Cùng xem ví dụ thật để đoán ra bẫy nhé!,A whole area just opened up! The number on each cell equals how many traps are hidden in the 8 cells right next to it. Let's look at a real example to spot a trap!
+tutorial_step_3,"Chạm vào ô số 1 này để mèo đứng lên đó nhé, đứng lên sẽ soi rõ 8 ô xung quanh luôn!","Tap this cell with the number 1 to stand on it, standing on it highlights the 8 cells around it!"
+tutorial_step_4,Ô CAM (chỗ em vừa đứng) ghi số 1 = quanh nó có đúng 1 bẫy. Nhìn 8 ô sáng xanh quanh mèo xem — chỉ còn DUY NHẤT 1 ô chưa mở (khoanh đỏ) — vậy chắc chắn ô đó có bẫy!,"The ORANGE cell (where you just stood) shows 1, meaning there is exactly 1 trap around it. Look at the 8 highlighted cells around the cat, only ONE is still unopened (circled in red), so that cell must be a trap!"
+tutorial_step_5,Giữ ngón tay lên ô khoanh đỏđể cắm cờ 🚩 đánh dấu bẫy vừa đoán ra!,Hold your finger on the red-circled cell to plant a flag 🚩 marking the trap you just found!
+tutorial_step_6,"Chạm vào ô số 1 này để mèo đứng lên đó, suy luận tiếp nhé!",Tap this cell with the number 1 to stand on it and keep reasoning!
+tutorial_step_7,Ô CAM (chỗ bạn vừa đứng) cũng ghi số 1 — mà bẫy đó chính là ô bạn vừa cắm cờ rồi! Vậy 3 ô trống còn lại quanh nó (kể cả ô khoanh xanh) đều AN TOÀN.,"The ORANGE cell (where you just stood) also shows 1, and that trap is the one you just flagged! So the 3 remaining empty cells around it (including the green-circled one) are all SAFE."
+tutorial_step_8,"Chạm vào ô khoanh xanh đó nhé, an toàn 100% rồi!","Tap that green-circled cell, it's 100% safe!"
+tutorial_step_9,Chạm vào ô số 1 này để mèo đứng lên soi tiếp nhé!,Tap this cell with the number 1 to stand on it and keep exploring!
+tutorial_step_10,"Y hệt lúc nãy: ô CAM (chỗ bạn vừa đứng) ghi số 1 và chỉ còn đúng 1 ô chưa mở (khoanh đỏ) — chắc chắn có bẫy ở đó, né xa ô này ra nhé!","Just like before: the ORANGE cell (where you just stood) shows 1 and only 1 cell is still unopened (circled in red), that's definitely a trap, stay away from it!"
+tutorial_step_11,Quay lại ô này 1 chút để soi nốt lần cuối nhé!,Go back to this cell for one last check!
+tutorial_step_12,Ô CAM (chỗ bạn đang đứng) ghi số 1 — bẫy đó chính là ô đỏ lúc nãy rồi. Vậy ô khoanh xanh này chắc chắn AN TOÀN!,"The ORANGE cell (where you're standing) shows 1, that trap is the red cell from before. So this green-circled cell is definitely SAFE!"
+tutorial_step_13,Chạm vào ô khoanh xanh nhé!,Tap the green-circled cell!
+tutorial_step_14,"Cuối cùng, dẫn mèo tới đĩa cá 🐟 để chiến thắng nhé!","Finally, lead the cat to the fish 🐟 to win!"
