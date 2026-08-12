@@ -935,6 +935,20 @@
         fill 0.4s ease, opacity 0.25s ease;
     }
 
+    /* Mèo hiện ra lúc vào màn (đúng lúc ô nó đứng vừa bung xong, xem updateCatPosition()
+       trong script.js) -> nảy lên sinh động thay vì chỉ mờ dần (opacity) đơn thuần.
+       Đè tạm animation piffle-idle trong lúc chạy (specificity cao hơn) rồi JS tự gỡ
+       class này ra sau khi chạy xong để nhường lại animation "thở" nhàn rỗi bình thường. */
+    @keyframes cat-bubble-in {
+      0% { opacity: 0; transform: translateY(16px) scale(0.6); }
+      65% { opacity: 1; transform: translateY(-8px) scale(1.08); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .cat-player.cat-bubble-in {
+      animation: cat-bubble-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
     /* Mèo "nhuộm màu" sau khi tìm thấy đốm màu giấu trong màn (cơ chế mèo-tìm-màu-
        để-ăn-cá) — .cat-body vốn để fill trắng "gốc" chờ đúng lúc này mới đổi. CSS
        thắng attribute fill trên SVG nên đè được luôn, không cần sửa lại markup.

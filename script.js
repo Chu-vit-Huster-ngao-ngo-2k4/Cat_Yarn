@@ -181,8 +181,17 @@ function sfxGain(waveType) {
     return SFX_BASE_GAIN * (SFX_WAVE_LOUDNESS[waveType] || 1);
 }
 
+// Tắt tiếng TẠM THỜI trong lúc quảng cáo CrazyGames đang chạy (yêu cầu bắt buộc
+// của họ — xem requestCrazyGamesAd() trong ads.js) — TÁCH RIÊNG khỏi soundEnabled
+// (tuỳ chọn của người chơi, có lưu localStorage) vì đây chỉ là trạng thái nhất
+// thời, không được ghi đè/mất lựa chọn bật-tắt âm thanh thật sự của người chơi.
+let adMuteActive = false;
+function setAdMuteActive(active) {
+    adMuteActive = active;
+}
+
 function playSound(type) {
-    if (!soundEnabled) return;
+    if (!soundEnabled || adMuteActive) return;
 
     if (type === 'win') {
         // Dùng file nhạc chiến thắng có sẵn trong project thay vì âm thanh tự tổng hợp.
@@ -1049,9 +1058,20 @@ function saveProgress() {
     try { localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify([...completedLevels])); } catch (e) { /* bỏ qua */ }
 }
 
+// Cứ mỗi MIDGAME_AD_EVERY_N màn qua được thì mới chèn 1 quảng cáo midgame (chỉ
+// CrazyGames dùng loại này) — KHÔNG chèn mỗi màn 1 lần, level ở đây khá ngắn
+// (vài chục giây tới vài phút), dồn dập quá sẽ làm phiền/rớt người chơi. Chỉnh
+// số này nếu muốn quảng cáo dày/thưa hơn.
+const MIDGAME_AD_EVERY_N = 3;
+
 function markLevelCompleted(idx) {
     completedLevels.add(idx);
     saveProgress();
+
+    if (completedLevels.size % MIDGAME_AD_EVERY_N === 0) showMidgameAd();
+    // "Khoảnh khắc ăn mừng" nên hiếm/đặc biệt (xem ghi chú notifyHappyMoment() trong
+    // ads.js) -> chỉ gọi đúng lúc chơi hết TOÀN BỘ level hiện có, không phải mỗi màn.
+    if (areAllLevelsCompleted()) notifyHappyMoment();
 }
 
 // =============================================================================
@@ -1167,6 +1187,7 @@ function goHome() {
     hideResultModal(); // popup thắng/thua là lớp phủ riêng, không tự ẩn theo màn hình
     showScreen('home');
     renderHomeScreen();
+    notifyGameplayStop(); // rời màn Chơi -> báo CrazyGames SDK hết đang "chơi thật"
 }
 
 // Nếu người chơi PHÂN VÂN không chọn ô nào trong ít nhất IDLE_THRESHOLD_MS, rồi sau
@@ -1181,9 +1202,11 @@ let lastMoveTime = Date.now();
 // BOARD_PAD = padding (14px) + border (4px) của #cells-layer — mèo được định vị
 // tương đối theo #game-board (không có padding/border riêng) nên phải cộng cả 2.
 const CELL_SIZE = 70, CELL_GAP = 8, BOARD_PAD = 18, CAT_SIZE = 56;
+const CAT_BUBBLE_IN_MS = 400; // phải khớp đúng thời lượng @keyframes cat-bubble-in trong style.css
 
 function loadLevel(idx, tryResume) {
     endGuidedTutorial();
+    notifyGameplayStart(); // vào màn = bắt đầu "chơi thật" -> báo CrazyGames SDK
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
     isWalking = false; // đề phòng lỡ đang tự chạy dở dang từ màn trước, không để input bị kẹt khoá
     clearHint(); // vòng gợi ý (nếu có) thuộc về ván trước, không còn ý nghĩa ở màn mới
@@ -1983,14 +2006,28 @@ function updateCatPosition(instant, bubbleDelayMs) {
 
     if (instant) {
         catEl.style.transition = 'none';
+        catEl.classList.remove('cat-bubble-in');
         if (bubbleDelayMs !== null && bubbleDelayMs !== undefined) catEl.style.opacity = '0';
         catEl.style.left = x + 'px';
         catEl.style.top = y + 'px';
         void catEl.offsetWidth;
         catEl.style.transition = '';
         if (bubbleDelayMs !== null && bubbleDelayMs !== undefined) {
-            // Chờ đúng lúc ô nó đứng bung xong (xem render()) rồi mới cho mèo hiện ra.
-            setTimeout(() => { catEl.style.opacity = '1'; }, bubbleDelayMs);
+            // Chờ đúng lúc ô nó đứng bung xong (xem render()) rồi mới cho mèo NẢY lên
+            // hiện ra (class cat-bubble-in, xem style.css) thay vì chỉ mờ dần đơn thuần.
+            // Chốt levelGeneration lại — lỡ người chơi bấm quá nhanh (Replay/đổi màn)
+            // ngay trong lúc đang chờ thì bỏ qua, tránh mèo nảy lên nhầm ở màn MỚI.
+            const myGeneration = levelGeneration;
+            setTimeout(() => {
+                if (myGeneration !== levelGeneration) return;
+                catEl.style.opacity = ''; // để @keyframes tự set opacity, tránh giằng co với inline style
+                catEl.classList.add('cat-bubble-in');
+                setTimeout(() => {
+                    if (myGeneration !== levelGeneration) return;
+                    catEl.classList.remove('cat-bubble-in');
+                    catEl.style.opacity = '1';
+                }, CAT_BUBBLE_IN_MS);
+            }, bubbleDelayMs);
         } else {
             catEl.style.opacity = '1';
         }
@@ -2928,6 +2965,7 @@ function attachButtonClickDelay() {
 }
 
 (async () => {
+    notifyLoadingStart(); // báo CrazyGames SDK biết game bắt đầu tải (chỉ có tác dụng khi chạy trên CrazyGames)
     loadDarkMode(); // áp trước tiên, tránh nháy nền sáng rồi mới tối lại
     loadLang();
     applyLocale(); // áp ngay cả trước khi vào Home, để màn Loading cũng hiện đúng ngôn ngữ
@@ -2939,6 +2977,7 @@ function attachButtonClickDelay() {
     loadProgress();
     renderHomeScreen();
     showScreen('home');
+    notifyLoadingStop(); // Home đã sẵn sàng, chơi được rồi -> báo tải xong
     maybeShowTutorialOnFirstVisit();
     attachCheatMenuTrigger();
     attachButtonPressFeedback();
