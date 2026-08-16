@@ -113,25 +113,6 @@
       z-index: 99;
     }
 
-    /* Loé sáng trắng toàn màn hình đúng khoảnh khắc chiến thắng, cho cảm giác "bùm!" */
-    #win-flash {
-      position: fixed;
-      inset: 0;
-      background: #ffffff;
-      z-index: 190;
-      pointer-events: none;
-      opacity: 0;
-    }
-
-    #win-flash.flash {
-      animation: win-flash-anim 0.45s ease-out;
-    }
-
-    @keyframes win-flash-anim {
-      0% { opacity: 0.9; }
-      100% { opacity: 0; }
-    }
-
     /* Rung nhẹ toàn màn game đúng lúc thắng, thêm chút "bùm" cho màn hình.
        Áp lên #app (không phải #game-board) vì #game-board đã có transform:scale()
        riêng do JS set để co giãn bàn cờ — animate transform ở đó sẽ đè mất phần
@@ -356,6 +337,40 @@
       padding: 6px 16px;
       font-weight: 700;
       font-size: 1.1rem;
+    }
+
+    /* Hàng chứa trái tim (mạng) + nút Soi Quanh CHUNG 1 HÀNG (đỡ tốn chiều cao hơn
+       so với để trái tim riêng 1 dòng dưới Level) — thay cho align-self:flex-end
+       trước đây gắn trực tiếp trên #neighbor-highlight-btn, giờ ghim cả HÀNG này
+       sang phải, 2 phần tử con canh giữa dọc với nhau. */
+    .soi-quanh-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      align-self: flex-end;
+      margin: 10px 0 0;
+      width: 100%;
+    }
+
+    /* Hàng trái tim (3 mạng/màn) — mỗi trái tim 1 span, đổi giữa 2 trạng thái còn/mất
+       bằng class .lost thay vì animate trực tiếp. */
+    .lives-display {
+      display: flex;
+      gap: 3px;
+    }
+
+    .lives-display .life-heart {
+      width: 18px;
+      height: 18px;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    /* Tym mất dùng ẢNH KHÁC (icon/Heart Black) chứ không phải lọc màu trên ảnh còn
+       nguyên — nên chỉ cần hơi mờ/nhỏ lại cho rõ là "đã mất", không cần filter nữa. */
+    .lives-display .life-heart.lost {
+      opacity: 0.6;
+      transform: scale(0.85);
     }
 
     /* Huy hiệu số xu hiện có — nhún nhẹ mỗi khi cộng thêm xu */
@@ -1649,8 +1664,6 @@
     /* Mặc định XÁM (chưa bật) — chỉ lên màu hồng khi thật sự đang bật, để không
        tranh hút mắt với nút Lại/Gợi Ý lúc chưa dùng tới. */
     #neighbor-highlight-btn {
-      align-self: flex-end;
-      margin: 10px 0 0;
       background-color: #a89a8a;
       color: #ffffff;
       box-shadow: 0 5px 0 #7d7061;
@@ -1772,4 +1785,18 @@
       font-weight: 600;
       line-height: 1.35;
       color: var(--cacao);
+    }
+
+    /* Riêng hàng giải thích "số = số bẫy quanh nó" có thêm sơ đồ minh hoạ (SVG vẽ
+       thẳng trong HTML, không cần ảnh ngoài) — xếp DỌC (ảnh trên, chữ dưới) thay vì
+       ngang như các hàng khác, vì ảnh cần đủ rộng để nhìn rõ từng ô. */
+    .tip-row-visual {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .tip-diagram {
+      display: block;
+      margin: 2px auto 6px;
     }

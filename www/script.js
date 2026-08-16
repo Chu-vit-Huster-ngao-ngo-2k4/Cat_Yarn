@@ -140,6 +140,10 @@ function applyDarkMode() {
 
 function showSettings() {
     updateSoundToggleUI();
+    // CHỈ DEV — hàng "Gen Lại Level" chỉ hiện khi level đang chơi là level TỰ SINH
+    // (không phải 1 trong các level tĩnh có sẵn) và DEV_LEVEL_TOOLS đang bật.
+    const devRegenRow = document.getElementById('dev-regen-row');
+    if (devRegenRow) devRegenRow.style.display = (DEV_LEVEL_TOOLS && currentLevelIdx >= STATIC_LEVEL_COUNT) ? 'flex' : 'none';
     document.getElementById('settings-modal').classList.add('show');
 }
 
@@ -575,6 +579,17 @@ async function loadLevels() {
     if (fillEl) fillEl.style.width = '100%';
 }
 
+// 2 nút dev liên quan tới level TỰ SINH: "Lưu Thành Level Tĩnh" ở popup thắng
+// (showResultModal lúc thắng, xem saveGeneratedLevelAsStatic()) và "Gen Lại Level"
+// trong Cài Đặt lúc đang chơi (xem devRegenerateCurrentLevel()). TẮT ĐI (false)
+// TRƯỚC KHI BUILD BẢN PHÁT HÀNH THẬT — không phải tính năng cho người chơi thường.
+const DEV_LEVEL_TOOLS = true;
+
+// Ranh giới level tĩnh (levels/*.json) và level tự sinh (idx >= giá trị này) — gán
+// lại đúng lúc loadLevels() chạy xong (xem bên dưới), KHÔNG cố định cứng vì
+// cheatRefreshLevels() có thể dò lại số level tĩnh giữa lúc game đang chạy.
+let STATIC_LEVEL_COUNT = 0;
+
 let currentLevelIdx = 0;
 // Kích thước lưới hiện tại — đổi theo từng level (5x5 -> 9x9), gán lại trong loadLevel().
 let GRID_ROWS = 5, GRID_COLS = 5;
@@ -585,6 +600,13 @@ let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắ
 let pendingBubbleLoad = false; // true khi đang bung TOÀN BỘ Ô lúc mới vào màn (kể cả ô ẩn)
 let levelGeneration = 0; // tăng mỗi lần loadLevel() chạy — dùng để huỷ hiệu ứng/popup thắng dở dang nếu lỡ Replay giữa lúc đang ăn mừng
 let usedReviveThisLevel = false; // mỗi lượt chơi 1 màn chỉ được hồi sinh 1 lần (xu hoặc xem QC)
+
+// Cơ chế "3 mạng" — mỗi màn được 3 lần dính bẫy MIỄN PHÍ (tự tháo ngòi, chơi tiếp
+// ngay không cần popup/trả phí gì cả), hết 3 mạng lần dính bẫy tiếp theo mới thật
+// sự thua (hiện popup Thua với Hồi Sinh trả xu/QC như cũ). Reset về đủ MAX_LIVES
+// mỗi khi vào lại màn (loadLevel()), không cộng dồn/trừ qua lại giữa các màn.
+const MAX_LIVES = 3;
+let livesRemaining = MAX_LIVES;
 // Cơ chế "tìm màu cho mèo" — tối đa 2 đốm màu độc lập mỗi màn ('C' = màu 1,
 // 'D' = màu 2). Màn chỉ có 'C' -> giữ nguyên hành vi cũ (nhuộm TOÀN THÂN mèo,
 // tương thích ngược với level đã có). Màn có ĐỦ CẢ 'C' và 'D' -> mèo nhuộm NỬA
@@ -620,10 +642,22 @@ function updateCoinDisplay() {
     document.getElementById('coin-count').textContent = coins;
 }
 
-// Xu thắng thấp + giá mua/hồi sinh cao (200, xem BOOSTER_BUY_COST/REVIVE_COST) —
-// cố tình để cày xu thuần khó, tăng xác suất người chơi chọn xem quảng cáo thay
-// vì trả xu (bản web/CrazyGames, nơi doanh thu đến từ quảng cáo).
-const LEVEL_COIN_REWARD = 10;
+// Vẽ lại hàng trái tim (3 mạng/màn) — MAX_LIVES trái tim cố định, trái tim nào đã
+// mất (index >= livesRemaining) thì mờ/xám đi thay vì biến mất hẳn, để người chơi
+// luôn thấy rõ "đã mất bao nhiêu / còn bao nhiêu".
+function updateLivesUI() {
+    const el = document.getElementById('lives-display');
+    if (!el) return;
+    let html = '';
+    for (let i = 0; i < MAX_LIVES; i++) {
+        const alive = i < livesRemaining;
+        const src = alive ? 'icon/Heart%202nd%20Outline%2064px.png' : 'icon/Heart%20Black%2064px.png';
+        html += `<img class="life-heart${alive ? '' : ' lost'}" src="${src}" alt="${alive ? 'còn mạng' : 'mất mạng'}">`;
+    }
+    el.innerHTML = html;
+}
+
+const LEVEL_COIN_REWARD = 40;
 
 function computeCoinReward() {
     return LEVEL_COIN_REWARD;
@@ -647,7 +681,7 @@ function awardCoins(amount) {
 const HINT_COUNT_KEY = 'catYarnHintCount';
 const UNDO_COUNT_KEY = 'catYarnUndoCount';
 const STARTER_BOOSTER_QTY = 3; // số lượng miễn phí ban đầu cho người chơi mới
-const BOOSTER_BUY_COST = 200; // giá mua thêm 1 lượt (bằng xu)
+const BOOSTER_BUY_COST = 100; // giá mua thêm 1 lượt (bằng xu)
 const BOOSTER_BUY_QTY = 1;
 
 let hintCount = STARTER_BOOSTER_QTY;
@@ -935,6 +969,414 @@ function findHintCell() {
     return null;
 }
 
+// =============================================================================
+// SINH LEVEL VÔ TẬN — hết level tĩnh (levels/*.json) thì tự sinh ngẫu nhiên thêm,
+// luôn CAO ĐỘ KHÓ (mật độ bẫy dày), lưới 7x7-10x10, xen kẽ cơ chế màu (1 hoặc 2
+// màu). Y HỆT quy trình đã dùng để tạo hàng loạt level tĩnh trước đây (random rồi
+// lọc qua đúng thuật toán suy luận), chỉ khác là chạy ngay trên trình duyệt lúc
+// chơi thay vì offline bằng Python — dùng lại ĐÚNG 3 luật suy luận ở
+// collectConstraints()/deduceAll() phía trên (viết lại dạng hàm THUẦN, nhận bàn cờ
+// làm tham số, không đụng vào state game đang chạy) để đảm bảo level sinh ra luôn
+// khớp CHÍNH XÁC với khả năng của Gợi Ý trong game — không có chuyện solver bảo
+// "giải được" mà Gợi Ý lại "bó tay".
+// =============================================================================
+const GEN_MIN_SIZE = 7, GEN_MAX_SIZE = 10;
+const GEN_DIRS_4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+// Không cho phép 1 vùng ô "count=0" (mở loang tự động, xem floodReveal()) chiếm
+// quá tỉ lệ này trên tổng số ô — mở trúng 1 ô như vậy sẽ lộ ra cả mảng lớn không
+// cần suy luận gì, coi như dễ thắng ăn gian. Cùng ngưỡng đã dùng lúc tạo 70 level
+// tĩnh trước đó.
+const GEN_MAX_FLOOD_RATIO = 0.22;
+
+// Tính kích thước vùng liên thông LỚN NHẤT gồm toàn ô count=0 (không tính bẫy) —
+// đúng logic mà floodReveal() dùng để mở loang (nối nhau qua 8 hướng).
+function genMaxFloodRegion(grid, size) {
+    const visited = [];
+    for (let r = 0; r < size; r++) visited.push(new Array(size).fill(false));
+    let maxRegion = 0;
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            if (visited[r][c] || grid[r][c].type === 'B' || grid[r][c].count !== 0) continue;
+            let regionSize = 0;
+            const stack = [[r, c]];
+            visited[r][c] = true;
+            while (stack.length) {
+                const [cr, cc] = stack.pop();
+                regionSize++;
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = cr + dr, nc = cc + dc;
+                        if (nr < 0 || nr >= size || nc < 0 || nc >= size || visited[nr][nc]) continue;
+                        if (grid[nr][nc].type !== 'B' && grid[nr][nc].count === 0) {
+                            visited[nr][nc] = true;
+                            stack.push([nr, nc]);
+                        }
+                    }
+                }
+            }
+            maxRegion = Math.max(maxRegion, regionSize);
+        }
+    }
+    return maxRegion;
+}
+
+function genBuildGrid(rows, size) {
+    const grid = [];
+    for (let r = 0; r < size; r++) {
+        const row = [];
+        for (let c = 0; c < size; c++) {
+            const ch = rows[r][c];
+            let type = 'N';
+            if (ch === 'S') type = 'S';
+            else if (ch === 'E') type = 'E';
+            else if (ch === '#') type = 'B';
+            row.push({ type, count: 0 });
+        }
+        grid.push(row);
+    }
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            let cnt = 0;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = r + dr, nc = c + dc;
+                    if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+                    if (grid[nr][nc].type === 'B') cnt++;
+                }
+            }
+            grid[r][c].count = cnt;
+        }
+    }
+    return grid;
+}
+
+// Y hệt collectConstraints()/deduceAll() ở trên nhưng nhận grid/size/revealed làm
+// tham số (không đọc biến toàn cục grid/GRID_ROWS/GRID_COLS của ván đang chơi).
+function genDeduceAll(grid, size, revealed) {
+    const deducedMine = new Set();
+    const deducedSafe = new Set();
+    let changed = true;
+    while (changed) {
+        changed = false;
+        const constraints = [];
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                const cell = grid[r][c];
+                if (!revealed[r][c] || cell.type !== 'N') continue;
+                const hidden = [];
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = r + dr, nc = c + dc;
+                        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+                        if (!revealed[nr][nc]) hidden.push(nr + ',' + nc);
+                    }
+                }
+                if (hidden.length === 0) continue;
+                const knownMines = hidden.filter(k => deducedMine.has(k));
+                const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
+                if (unknown.length === 0) continue;
+                constraints.push({ unknown: new Set(unknown), remaining: cell.count - knownMines.length });
+            }
+        }
+        for (const con of constraints) {
+            if (con.remaining === 0 && con.unknown.size > 0) {
+                for (const k of con.unknown) if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; }
+            } else if (con.remaining === con.unknown.size && con.unknown.size > 0) {
+                for (const k of con.unknown) if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; }
+            }
+        }
+        for (let i = 0; i < constraints.length; i++) {
+            for (let j = 0; j < constraints.length; j++) {
+                if (i === j) continue;
+                const A = constraints[i], B = constraints[j];
+                if (A.unknown.size === 0 || A.unknown.size >= B.unknown.size) continue;
+                let isSubset = true;
+                for (const k of A.unknown) if (!B.unknown.has(k)) { isSubset = false; break; }
+                if (!isSubset) continue;
+                const diffCells = [...B.unknown].filter(k => !A.unknown.has(k));
+                const diffCount = B.remaining - A.remaining;
+                if (diffCount === 0 && diffCells.length > 0) {
+                    for (const k of diffCells) if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; }
+                } else if (diffCount === diffCells.length && diffCells.length > 0) {
+                    for (const k of diffCells) if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; }
+                }
+            }
+        }
+    }
+    return { deducedSafe, deducedMine };
+}
+
+function genFloodReveal(grid, size, revealed, r, c) {
+    const queue = [[r, c]];
+    while (queue.length) {
+        const [cr, cc] = queue.shift();
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = cr + dr, nc = cc + dc;
+                if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+                if (revealed[nr][nc] || grid[nr][nc].type === 'B') continue;
+                revealed[nr][nc] = true;
+                if (grid[nr][nc].type === 'N' && grid[nr][nc].count === 0) queue.push([nr, nc]);
+            }
+        }
+    }
+}
+
+// Y hệt simulate() trong tools/level_checker.py: mở loang quanh Start, lặp suy
+// luận tới khi không mở thêm được gì, rồi báo có "chắc chắn tới được cá" không.
+function genSimulate(grid, size, sPos, ePos) {
+    const revealed = [];
+    for (let r = 0; r < size; r++) revealed.push(new Array(size).fill(false));
+    revealed[sPos[0]][sPos[1]] = true;
+
+    for (const [dr, dc] of GEN_DIRS_4) {
+        const nr = sPos[0] + dr, nc = sPos[1] + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        if (grid[nr][nc].type === 'B') return { firstMoveBad: true, reachedE: false };
+    }
+    for (const [dr, dc] of GEN_DIRS_4) {
+        const nr = sPos[0] + dr, nc = sPos[1] + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        if (!revealed[nr][nc] && grid[nr][nc].type !== 'B') {
+            revealed[nr][nc] = true;
+            if (grid[nr][nc].type === 'N' && grid[nr][nc].count === 0) genFloodReveal(grid, size, revealed, nr, nc);
+        }
+    }
+
+    const eReachable = () => {
+        if (revealed[ePos[0]][ePos[1]]) return true;
+        for (const [dr, dc] of GEN_DIRS_4) {
+            const nr = ePos[0] + dr, nc = ePos[1] + dc;
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size && revealed[nr][nc]) return true;
+        }
+        return false;
+    };
+
+    while (true) {
+        const { deducedSafe } = genDeduceAll(grid, size, revealed);
+        let newlyRevealed = false;
+        for (const key of deducedSafe) {
+            const [r, c] = key.split(',').map(Number);
+            if (!revealed[r][c]) {
+                revealed[r][c] = true;
+                newlyRevealed = true;
+                if (grid[r][c].type === 'N' && grid[r][c].count === 0) genFloodReveal(grid, size, revealed, r, c);
+            }
+        }
+        if (!newlyRevealed) break;
+    }
+
+    return { firstMoveBad: false, reachedE: eReachable() };
+}
+
+// Random 1 layout ứng viên rồi kiểm bằng genSimulate() — thử nhiều lần tới khi ra
+// 1 bàn cờ giải được thuần logic (đúng chuẩn mọi level khác trong game).
+function genTryLevel(size, density) {
+    const sPos = [0, 0], ePos = [size - 1, size - 1];
+    const forbidden = new Set([`${sPos[0]},${sPos[1]}`, `${ePos[0]},${ePos[1]}`]);
+    // CẢ 8 hướng quanh Start (không chỉ 4 hướng ngang/dọc mà mèo thật sự đi được) —
+    // Start nằm góc (0,0) nên chỉ có đúng 3 ô lân cận hợp lệ (phải, dưới, chéo dưới-
+    // phải), cả 3 đều đảm bảo không phải bẫy. Rộng rãi hơn hẳn mức "chỉ cần nước đi
+    // đầu không phải đoán" (genSimulate() bên dưới vẫn dùng đúng 4 hướng CHO DI
+    // CHUYỂN THẬT, không đổi) — đây là yêu cầu riêng, chừa hẳn vùng quanh Start sạch
+    // bẫy hoàn toàn cho thoáng ngay từ đầu.
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = sPos[0] + dr, nc = sPos[1] + dc;
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size) forbidden.add(`${nr},${nc}`);
+        }
+    }
+    const cells = [];
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (!forbidden.has(`${r},${c}`)) cells.push([r, c]);
+    // Fisher-Yates xáo trộn rồi lấy N ô đầu làm bẫy.
+    for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+    const nBombs = Math.round(size * size * density);
+    const bombs = new Set(cells.slice(0, nBombs).map(([r, c]) => `${r},${c}`));
+
+    const rows = [];
+    for (let r = 0; r < size; r++) {
+        let row = '';
+        for (let c = 0; c < size; c++) {
+            if (r === sPos[0] && c === sPos[1]) row += 'S';
+            else if (r === ePos[0] && c === ePos[1]) row += 'E';
+            else if (bombs.has(`${r},${c}`)) row += '#';
+            else row += '.';
+        }
+        rows.push(row);
+    }
+    const grid = genBuildGrid(rows, size);
+    const result = genSimulate(grid, size, sPos, ePos);
+    if (result.firstMoveBad || !result.reachedE) return null;
+    // Bàn cờ giải được rồi vẫn có thể bị loại — nếu có 1 vùng ô count=0 (mở loang
+    // 1 phát ra cả mảng lớn, xem floodReveal()) chiếm quá GEN_MAX_FLOOD_RATIO tổng
+    // số ô, người chơi mở trúng ô đó coi như ăn gian thắng luôn (lộ gần hết bàn cờ
+    // không cần suy luận gì thêm) — huỷ, thử random lại layout khác.
+    if (genMaxFloodRegion(grid, size) / (size * size) > GEN_MAX_FLOOD_RATIO) return null;
+    return { rows, bombs, size };
+}
+
+// Đặt 1 (hoặc 2) đốm màu lên ô thường bất kỳ không phải bẫy/S/E — giống hệt quy
+// ước của level tĩnh: KHÔNG cần đảm bảo suy luận tới được, chỉ cần không phải bẫy.
+// Tập hợp mọi ô mèo THẬT SỰ đi tới được từ Start — chỉ đi qua ô KHÔNG PHẢI bẫy,
+// theo ĐÚNG 4 hướng ngang/dọc (handleMoveInput() không cho đi chéo). Ô màu đặt
+// ngoài vùng này (lọt vào 1 túi bị bẫy bao kín hoàn toàn) sẽ khiến level KHÔNG
+// THỂ THẮNG — cá luôn chặn cho tới khi tìm đủ màu mà mèo lại không bao giờ tới
+// được ô màu đó.
+function genReachableCells(bombs, size, sPos) {
+    const visited = new Set([`${sPos[0]},${sPos[1]}`]);
+    const queue = [sPos];
+    while (queue.length) {
+        const [r, c] = queue.shift();
+        for (const [dr, dc] of GEN_DIRS_4) {
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+            const key = `${nr},${nc}`;
+            if (visited.has(key) || bombs.has(key)) continue;
+            visited.add(key);
+            queue.push([nr, nc]);
+        }
+    }
+    return visited;
+}
+
+function genPlaceColor(rows, size, bombs, dual) {
+    const sPos = '0,0', ePos = `${size - 1},${size - 1}`;
+    const reachable = genReachableCells(bombs, size, [0, 0]);
+    const candidates = [];
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            const key = `${r},${c}`;
+            if (key === sPos || key === ePos || bombs.has(key)) continue;
+            if (!reachable.has(key)) continue; // đi không tới được -> loại thẳng, không xét nữa
+            candidates.push([r, c]);
+        }
+    }
+    // Ưu tiên ô XA CẢ Start LẪN Đích (không chỉ xa 1 trong 2) — chấm điểm bằng
+    // khoảng cách NHỎ HƠN trong 2 khoảng cách (tới Start, tới Đích), càng cao càng
+    // xa cả đôi bên. Chỉ chọn trong nhóm 40% ô có điểm cao nhất rồi mới xáo trộn
+    // random trong nhóm đó — vừa đảm bảo luôn xa, vừa không rơi vào đúng 1 ô cố
+    // định mỗi lần (mất phần ngẫu nhiên) — buộc người chơi phải dò khắp bàn cờ
+    // thay vì thấy ngay gần lúc mới vào màn hoặc gần lúc sắp tới đích.
+    const scored = candidates.map(([r, c]) => {
+        const distS = r + c; // Start ở (0,0)
+        const distE = (size - 1 - r) + (size - 1 - c); // Đích ở góc đối diện
+        return { pos: [r, c], score: Math.min(distS, distE) };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const farCount = Math.max(dual ? 2 : 1, Math.ceil(scored.length * 0.4));
+    const farCandidates = scored.slice(0, farCount).map(s => s.pos);
+    for (let i = farCandidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [farCandidates[i], farCandidates[j]] = [farCandidates[j], farCandidates[i]];
+    }
+    const chosen = dual ? farCandidates.slice(0, 2) : farCandidates.slice(0, 1);
+    if (chosen.length === 0) return rows;
+    const grid2 = rows.map(row => row.split(''));
+    grid2[chosen[0][0]][chosen[0][1]] = 'C';
+    if (dual && chosen[1]) grid2[chosen[1][0]][chosen[1][1]] = 'D';
+    return grid2.map(row => row.join(''));
+}
+
+// "Luôn khó" theo yêu cầu — mật độ bẫy giữ ở mức cao cố định theo từng cỡ lưới
+// (không tăng dần từ dễ), lưới càng lớn thì mật độ trần thấp hơn 1 chút (lưới lớn
+// dễ tìm bàn cờ giải được ở mật độ cao hơn lưới nhỏ, nhưng vẫn phải né random quá
+// lâu không ra kết quả) — số liệu tham khảo từ đợt tạo 70 level tĩnh trước đó.
+const GEN_DENSITY_BY_SIZE = { 7: 0.33, 8: 0.32, 9: 0.30, 10: 0.28 };
+
+// Sinh 1 level mới, thử tối đa GEN_MAX_TRIES lần (mỗi lần random khác nhau), hạ
+// dần mật độ nếu mãi không ra bàn cờ giải được (tránh treo trình duyệt) — luôn trả
+// về được 1 level hợp lệ (không bao giờ null) vì mật độ hạ dần cuối cùng sẽ dễ tới
+// mức chắc chắn tìm ra.
+const GEN_MAX_TRIES = 400;
+
+// Ô 0 bẫy (toàn '.') LUÔN giải được 100% (flood-reveal mở banh cả bàn cờ ngay từ
+// đầu, mèo đi thẳng luôn tới cá) — dùng làm PHAO CỨU SINH cuối cùng, không bao giờ
+// thất bại, để "chắc chắn có đường đi tới đích" là đảm bảo TUYỆT ĐỐI chứ không
+// phải "gần như chắc chắn". Chỉ dùng khi mọi mật độ khác đều xui không ra kết quả
+// (cực hiếm — hàng nghìn lượt thử ở nhiều mật độ khác nhau).
+function genGuaranteedFallback(size) {
+    const rows = [];
+    for (let r = 0; r < size; r++) {
+        let row = '';
+        for (let c = 0; c < size; c++) {
+            row += (r === 0 && c === 0) ? 'S' : (r === size - 1 && c === size - 1) ? 'E' : '.';
+        }
+        rows.push(row);
+    }
+    return { rows, bombs: new Set(), size };
+}
+
+function generateProceduralLevel() {
+    const size = GEN_MIN_SIZE + Math.floor(Math.random() * (GEN_MAX_SIZE - GEN_MIN_SIZE + 1));
+    let density = GEN_DENSITY_BY_SIZE[size] || 0.30;
+    let result = null;
+    // Hạ mật độ dần qua nhiều vòng, mỗi vòng thử GEN_MAX_TRIES lần — càng hạ mật độ
+    // càng dễ ra bàn cờ giải được, tới khi chạm hẳn 0 (genGuaranteedFallback ở trên)
+    // thì KHÔNG THỂ nào thất bại được nữa về mặt toán học.
+    for (let attempt = 0; attempt < 10 && !result; attempt++) {
+        for (let i = 0; i < GEN_MAX_TRIES && !result; i++) {
+            result = genTryLevel(size, Math.max(0, density));
+        }
+        density -= 0.04;
+    }
+    if (!result) result = genGuaranteedFallback(size); // phao cứu sinh — không bao giờ null
+
+    let rows = result.rows;
+    // Tăng xác suất có màu: ~1/2 -> ~3/4 level sinh ra có màu, trong đó ~40% là 2 màu.
+    if (Math.random() < 0.75) {
+        rows = genPlaceColor(rows, result.size, result.bombs, Math.random() < 0.4);
+    }
+    return rows;
+}
+
+// Đảm bảo LEVELS có đủ tới index idx — hết level tĩnh (levels/*.json) thì tự sinh
+// thêm bằng generateProceduralLevel(), vô tận. Gọi ở ĐẦU loadLevel() nên MỌI lối
+// vào 1 level (chơi tiếp, Màn Tiếp, cheat nhảy level...) đều tự động được che phủ,
+// không cần sửa từng nơi riêng lẻ.
+function ensureLevelGenerated(idx) {
+    while (LEVELS.length <= idx) LEVELS.push(generateProceduralLevel());
+}
+
+// CHỈ DEV (xem DEV_LEVEL_TOOLS) — tải file JSON của 1 level TỰ SINH về máy,
+// đúng định dạng/tên file y hệt levels/levelNN.json, để dev tự tay copy vào thư
+// mục levels/ (rồi copy tiếp sang www/levels/ như quy trình thêm level bình
+// thường) nếu muốn giữ lại làm level cố định. Trình duyệt không cho JS ghi thẳng
+// vào ổ đĩa nên đây là cách khả thi duy nhất — không tự động hoá xa hơn được.
+function saveGeneratedLevelAsStatic(idx) {
+    const rows = LEVELS[idx];
+    if (!rows) return;
+    const filename = `level${String(idx + 1).padStart(2, '0')}.json`;
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// CHỈ DEV — không ưng layout level tự sinh hiện tại (xấu/dễ quá/khó quá...) thì
+// sinh lại 1 bản MỚI đè lên đúng vị trí idx đó trong LEVELS rồi tải lại ngay, để
+// dev thử đi thử lại nhanh mà không cần thoát ra Home. Chỉ tác dụng với level TỰ
+// SINH (nút vốn đã ẩn với level tĩnh, xem showSettings()), vô hại nếu lỡ gọi cho
+// level tĩnh — chỉ đơn giản không làm gì (return sớm).
+function devRegenerateCurrentLevel() {
+    if (!DEV_LEVEL_TOOLS || currentLevelIdx < STATIC_LEVEL_COUNT) return;
+    LEVELS[currentLevelIdx] = generateProceduralLevel();
+    hideSettings();
+    loadLevel(currentLevelIdx);
+}
+
 // Ô đang được Gợi Ý trỏ tới (nếu có) — vòng tròn CHỈ biến mất khi mèo thật sự bước
 // vào đúng ô này (xem revealAndMove()), không tự tắt theo thời gian.
 let hintTargetCell = null;
@@ -1015,7 +1457,7 @@ function useHint(free) {
 // HỒI SINH khi dính bẫy — trả xu HOẶC xem quảng cáo (mỗi lượt chơi 1 màn chỉ được
 // 1 lần), "tháo ngòi" đúng ô bẫy vừa dính để mèo đi tiếp từ đó thay vì chơi lại từ đầu.
 // =============================================================================
-const REVIVE_COST = 200;
+const REVIVE_COST = 30;
 
 function performRevive(r, c) {
     usedReviveThisLevel = true;
@@ -1061,17 +1503,10 @@ function saveProgress() {
     try { localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify([...completedLevels])); } catch (e) { /* bỏ qua */ }
 }
 
-// Cứ mỗi MIDGAME_AD_EVERY_N màn qua được thì mới chèn 1 quảng cáo midgame (chỉ
-// CrazyGames dùng loại này) — KHÔNG chèn mỗi màn 1 lần, level ở đây khá ngắn
-// (vài chục giây tới vài phút), dồn dập quá sẽ làm phiền/rớt người chơi. Chỉnh
-// số này nếu muốn quảng cáo dày/thưa hơn.
-const MIDGAME_AD_EVERY_N = 3;
-
 function markLevelCompleted(idx) {
     completedLevels.add(idx);
     saveProgress();
 
-    if (completedLevels.size % MIDGAME_AD_EVERY_N === 0) showMidgameAd();
     // "Khoảnh khắc ăn mừng" nên hiếm/đặc biệt (xem ghi chú notifyHappyMoment() trong
     // ads.js) -> chỉ gọi đúng lúc chơi hết TOÀN BỘ level hiện có, không phải mỗi màn.
     if (areAllLevelsCompleted()) notifyHappyMoment();
@@ -1107,6 +1542,7 @@ function saveLevelProgress() {
             foundColor1,
             foundColor2,
             usedReviveThisLevel,
+            livesRemaining,
             cells: grid.map(row => row.map(cell => ({
                 revealed: cell.revealed, flagged: cell.flagged, defused: !!cell.defused
             })))
@@ -1122,16 +1558,21 @@ function isLevelUnlocked(idx) {
     return idx === 0 || completedLevels.has(idx - 1);
 }
 
-// Màn tiếp theo nên chơi = màn đầu tiên chưa qua (hoặc màn cuối nếu đã qua hết).
+// Màn tiếp theo nên chơi = màn đầu tiên chưa qua — không còn trần LEVELS.length-1
+// nữa (vô tận, xem ensureLevelGenerated()), cứ hết level tĩnh đã qua thì tự sinh
+// thêm luôn ở đây để luôn trả về đúng 1 level CHƠI ĐƯỢC.
 function getNextPlayableLevel() {
     let idx = 0;
-    while (idx < LEVELS.length - 1 && completedLevels.has(idx)) idx++;
+    while (completedLevels.has(idx)) idx++;
+    ensureLevelGenerated(idx);
     return idx;
 }
 
-// Đã chơi qua hết toàn bộ level hiện có (kể cả level cuối) chưa.
+// Level vô tận (xem ensureLevelGenerated()) -> không còn khái niệm "hết level" nữa,
+// luôn có thêm để chơi. Giữ lại hàm này (luôn false) để không phải sửa những chỗ
+// khác đang gọi nó (màn Home/CrazyGames happy-moment).
 function areAllLevelsCompleted() {
-    return LEVELS.length > 0 && completedLevels.has(LEVELS.length - 1);
+    return false;
 }
 
 function renderHomeScreen() {
@@ -1208,6 +1649,7 @@ const CELL_SIZE = 70, CELL_GAP = 8, BOARD_PAD = 18, CAT_SIZE = 56;
 const CAT_BUBBLE_IN_MS = 400; // phải khớp đúng thời lượng @keyframes cat-bubble-in trong style.css
 
 function loadLevel(idx, tryResume) {
+    ensureLevelGenerated(idx); // hết level tĩnh thì tự sinh thêm — che phủ MỌI lối vào (Màn Tiếp, cheat, resume...) chỉ bằng 1 chỗ gọi
     endGuidedTutorial();
     notifyGameplayStart(); // vào màn = bắt đầu "chơi thật" -> báo CrazyGames SDK
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
@@ -1302,7 +1744,11 @@ function loadLevel(idx, tryResume) {
         foundColor1 = !!resume.foundColor1;
         foundColor2 = !!resume.foundColor2;
         usedReviveThisLevel = !!resume.usedReviveThisLevel;
+        livesRemaining = (typeof resume.livesRemaining === 'number') ? resume.livesRemaining : MAX_LIVES;
+    } else {
+        livesRemaining = MAX_LIVES; // vào màn mới (không phải khôi phục dở dang) -> luôn đủ 3 mạng
     }
+    updateLivesUI();
 
     document.getElementById('level-title').innerText = t('level_title', { n: currentLevelIdx + 1 });
     // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
@@ -1492,22 +1938,15 @@ function showResultModal({ type, icon, title, message, actions, coinReward }) {
         coinRewardEl.classList.remove('show');
     }
 
-    // Thắng thì bung mạnh + icon nhảy nhót + loé sáng + rung nhẹ màn hình cho đã mắt.
+    // Thắng thì bung mạnh + icon nhảy nhót + rung nhẹ màn hình cho đã mắt (bỏ hẳn
+    // hiệu ứng loé sáng trắng toàn màn hình — từng bị chê chói/đau mắt).
     cardEl.classList.toggle('win-pop', type === 'win');
     iconEl.classList.toggle('win-icon', type === 'win');
     if (type === 'win') {
-        triggerWinFlash();
         triggerScreenShake();
     }
 
     document.getElementById('result-modal').classList.add('show');
-}
-
-function triggerWinFlash() {
-    const flash = document.getElementById('win-flash');
-    flash.classList.remove('flash');
-    void flash.offsetWidth;
-    flash.classList.add('flash');
 }
 
 function triggerScreenShake() {
@@ -1619,25 +2058,13 @@ const TUTORIAL_STEPS = [
       msgKey: 'tutorial_step_7' },
 
     { action: 'move', target: { r: 3, c: 3 }, clue: { r: 2, c: 2 },
-      msgKey: 'tutorial_step_8' },
-
-    { action: 'move', target: { r: 2, c: 4 }, clue: null,
-      msgKey: 'tutorial_step_9' },
-
-    { action: 'click', target: { r: 3, c: 4 }, clue: { r: 2, c: 4 }, danger: true,
-      msgKey: 'tutorial_step_10' },
-
-    { action: 'move', target: { r: 3, c: 3 }, clue: null,
-      msgKey: 'tutorial_step_11' },
-
-    { action: 'click', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
-      msgKey: 'tutorial_step_12' },
-
-    { action: 'move', target: { r: 4, c: 3 }, clue: { r: 3, c: 3 },
-      msgKey: 'tutorial_step_13' },
-
-    { action: 'move', target: { r: 4, c: 4 }, clue: null,
-      msgKey: 'tutorial_step_14' }
+      msgKey: 'tutorial_step_8' }
+    // Trước đây có thêm 6 bước lặp lại y hệt kiểu suy luận vừa dạy (bẫy nguy hiểm +
+    // ô an toàn) ở 1 vị trí khác trên bàn cờ — cắt bớt cho gọn (14 -> 8 bước, đỡ dài
+    // dòng). Từ đây tutorial kết thúc (endGuidedTutorial() tự chạy, xem
+    // advanceTutorial()), người chơi tự đi nốt quãng còn lại tới cá bằng đúng kiểu
+    // suy luận vừa học — level1.json vẫn đảm bảo giải được thuần logic như mọi
+    // level khác, không cần dắt tay thêm.
 ];
 
 let tutorialActive = false;
@@ -2458,6 +2885,37 @@ function revealAndMove(r, c) {
     if (cell.type === 'B') {
         if (cell.defused) return; // đã hồi sinh qua đúng ô này rồi -> giờ an toàn, đi xuyên qua bình thường
 
+        // 3 level đầu (idx 0-2) là màn làm quen gameplay -> dính bẫy KHÔNG trừ mạng,
+        // không bao giờ thua, để người chơi mới thoải mái thử/sai trước khi cơ chế 3
+        // tym thật sự có hiệu lực từ level 4 trở đi.
+        const isPracticeLevel = currentLevelIdx < 3;
+
+        // Trừ mạng TRƯỚC rồi mới xét còn hay hết — dính bẫy lần thứ 3 (dùng hết tym
+        // cuối) phải thua LUÔN ở lần đó, không phải tháo ngòi cho qua rồi lần thứ 4
+        // mới thua (dùng >0 mà trừ SAU sẽ bị vậy — đã sửa lại thứ tự cho đúng).
+        if (!isPracticeLevel) {
+            livesRemaining--;
+            updateLivesUI();
+        }
+        if (isPracticeLevel || livesRemaining > 0) {
+            // Vẫn còn tym -> tự tháo ngòi, chơi tiếp NGAY (không hiện popup Thua,
+            // không cần trả xu/xem QC). Hết tym thì rơi xuống luồng Thua/Hồi Sinh
+            // trả phí như cũ bên dưới.
+            cell.defused = true;
+            playSound('boom');
+            updateStatus(
+                isPracticeLevel ? t('status_boom_practice') : t('status_life_lost', { lives: livesRemaining }),
+                '#ff5964');
+            setTimeout(() => {
+                const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                if (cellEl) {
+                    const rect = cellEl.getBoundingClientRect();
+                    triggerBoomFX(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                }
+            }, 80);
+            return;
+        }
+
         playSound('boom');
         updateStatus(t('status_boom'), '#ff5964');
         isGameOver = true;
@@ -2520,7 +2978,7 @@ function revealAndMove(r, c) {
         markLevelCompleted(currentLevelIdx);
         clearLevelProgress(); // vừa qua màn -> không còn "chơi dở" nữa, dọn sạch tránh khôi phục nhầm màn đã xong
 
-        const hasNextLevel = currentLevelIdx < LEVELS.length - 1;
+        const hasNextLevel = true; // luôn có màn tiếp — hết level tĩnh thì tự sinh thêm (xem ensureLevelGenerated())
 
         setTimeout(() => {
             if (myGeneration !== levelGeneration) return; // đã Replay/đổi màn giữa chừng
@@ -2563,6 +3021,19 @@ function revealAndMove(r, c) {
                         );
                     }
                 });
+                // CHỈ DEV — level vừa thắng là level TỰ SINH (không phải level tĩnh có
+                // sẵn) thì cho tải file JSON về máy, tự tay copy vào levels/ nếu thấy
+                // "hay" muốn giữ lại làm level cố định. Xem DEV_LEVEL_TOOLS ở đầu
+                // file — nhớ tắt (false) trước khi build bản phát hành thật.
+                if (DEV_LEVEL_TOOLS && currentLevelIdx >= STATIC_LEVEL_COUNT) {
+                    actions.push({
+                        cls: 'btn-pink', label: '💾 [Dev] Lưu Thành Level Tĩnh', onClick: (btn) => {
+                            saveGeneratedLevelAsStatic(currentLevelIdx);
+                            btn.innerText = '✅ Đã tải file!';
+                            btn.disabled = true;
+                        }
+                    });
+                }
                 if (hasNextLevel) {
                     actions.push({ cls: 'btn-green', label: t('action_next_level'), onClick: () => nextLevel() });
                 } else {
@@ -2679,9 +3150,7 @@ function floodReveal(startR, startC) {
 }
 
 function nextLevel() {
-    if (currentLevelIdx < LEVELS.length - 1) {
-        loadLevel(currentLevelIdx + 1);
-    }
+    loadLevel(currentLevelIdx + 1); // luôn có "màn tiếp" — hết level tĩnh thì loadLevel() tự sinh thêm (xem ensureLevelGenerated())
 }
 
 // Trước đây là booster "Đi Lại" (undo bước vừa đi) — bỏ vì lệch logic: nếu người
@@ -2765,7 +3234,7 @@ function attachCheatMenuTrigger() {
 function syncCheatLevelInput() {
     const input = document.getElementById('cheat-level-input');
     if (!input) return;
-    input.max = LEVELS.length;
+    input.removeAttribute('max'); // level vô tận (xem ensureLevelGenerated()) -> không còn trần cố định để ghim nữa
     input.value = currentLevelIdx + 1;
 }
 
@@ -2776,6 +3245,7 @@ async function cheatRefreshLevels(btn) {
     btn.disabled = true;
     btn.innerText = '⏳ Đang dò...';
     await loadLevels();
+    STATIC_LEVEL_COUNT = LEVELS.length;
     syncCheatLevelInput();
     renderHomeScreen();
     btn.innerText = `✅ Tìm thấy ${LEVELS.length} level!`;
@@ -2813,7 +3283,9 @@ document.getElementById('cheat-modal').addEventListener('click', (e) => {
 function cheatGoToLevel() {
     const input = document.getElementById('cheat-level-input');
     const idx = parseInt(input.value, 10) - 1; // input là số level 1-based (Level 1, 2, 3...), grid/mảng LEVELS dùng idx 0-based
-    if (!LEVELS.length || isNaN(idx) || idx < 0 || idx >= LEVELS.length) return;
+    // KHÔNG còn chặn idx >= LEVELS.length nữa — level vô tận (xem ensureLevelGenerated()),
+    // loadLevel() bên dưới tự sinh thêm nếu nhảy quá số level tĩnh hiện có.
+    if (isNaN(idx) || idx < 0) return;
     // Cheat nhảy tới level nào thì ĐẶT LẠI HOÀN TOÀN tiến trình cho khớp đúng level
     // đó: 0..idx-1 coi như đã qua, từ idx trở đi CHƯA qua — để quay về Home thấy
     // đúng level vừa nhảy tới. Phải xoá sạch rồi gán lại từ đầu (không chỉ .add()
@@ -2974,6 +3446,7 @@ function attachButtonClickDelay() {
     applyLocale(); // áp ngay cả trước khi vào Home, để màn Loading cũng hiện đúng ngôn ngữ
     showScreen('loading');
     await loadLevels();
+    STATIC_LEVEL_COUNT = LEVELS.length; // ranh giới level tĩnh (levels/*.json) vs level tự sinh (xem DEV_LEVEL_TOOLS)
     loadCoins();
     loadBoosterCounts();
     loadBoosterUnlockState();

@@ -21,8 +21,6 @@
 
   <canvas id="fx-canvas"></canvas>
 
-  <div id="win-flash"></div>
-
   <div id="app">
 
     <!-- ===== MÀN LOADING ===== -->
@@ -80,7 +78,10 @@
           </div>
         </div>
         <div id="status" class="status-banner">Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾</div>
-        <button class="btn-piffle" id="neighbor-highlight-btn" onclick="toggleNeighborHighlight()" data-i18n="neighbor_highlight_btn">🔦 Soi Quanh</button>
+        <div class="soi-quanh-row">
+          <div class="lives-display" id="lives-display"></div>
+          <button class="btn-piffle" id="neighbor-highlight-btn" onclick="toggleNeighborHighlight()" data-i18n="neighbor_highlight_btn">🔦 Soi Quanh</button>
+        </div>
       </div>
 
       <div class="screen-middle" id="board-area">
@@ -133,6 +134,12 @@
       </div>
       <div class="settings-row">
         <button class="btn-piffle btn-pink" onclick="replayFromSettings()" data-i18n="settings_replay_btn">Chơi Lại</button>
+      </div>
+      <!-- CHỈ DEV — chỉ hiện khi level đang chơi là level TỰ SINH (xem
+           DEV_LEVEL_TOOLS/showSettings() trong script.js), ẩn hẳn với level tĩnh
+           và tắt hẳn nếu DEV_LEVEL_TOOLS = false lúc build bản thật. -->
+      <div class="settings-row" id="dev-regen-row" style="display:none;">
+        <button class="btn-piffle btn-yellow" onclick="devRegenerateCurrentLevel()">🎲 [Dev] Gen Lại Level</button>
       </div>
     </div>
   </div>
@@ -216,8 +223,21 @@
           <span class="tip-icon">🐾</span>
           <span class="tip-text" data-i18n="tutorial_tip_move">Chạm ô kề bên (hoặc bấm phím mũi tên) để mèo bước tới.</span>
         </div>
-        <div class="tip-row">
-          <span class="tip-icon">🔢</span>
+        <div class="tip-row tip-row-visual">
+          <svg class="tip-diagram" viewBox="0 0 174 174" width="140" height="140" aria-hidden="true">
+            <rect x="0" y="0" width="54" height="54" rx="10" fill="#ffca3a" stroke="#4a3022" stroke-width="3"/>
+            <text x="27" y="35" text-anchor="middle" font-size="26">💣</text>
+            <rect x="60" y="0" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="120" y="0" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="0" y="60" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="60" y="60" width="54" height="54" rx="10" fill="#ffffff" stroke="#4a3022" stroke-width="4"/>
+            <text x="87" y="97" text-anchor="middle" font-size="30" font-weight="700" fill="#388e3c" font-family="'Fredoka', cursive, sans-serif">2</text>
+            <rect x="120" y="60" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="0" y="120" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="60" y="120" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+            <rect x="120" y="120" width="54" height="54" rx="10" fill="#ffca3a" stroke="#4a3022" stroke-width="3"/>
+            <text x="147" y="155" text-anchor="middle" font-size="26">💣</text>
+          </svg>
           <span class="tip-text" data-i18n="tutorial_tip_number">Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.</span>
         </div>
         <div class="tip-row">
