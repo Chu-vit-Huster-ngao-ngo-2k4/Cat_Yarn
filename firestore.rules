@@ -1,0 +1,29 @@
+// Rules cho Firestore Database dùng bởi Bảng Xếp Hạng (leaderboard.js).
+// KHÔNG tự áp dụng — phải tự copy dán vào tab "Rules" của Firestore Database
+// trên Firebase Console rồi bấm Publish (xem hướng dẫn trong firebase-config.js).
+//
+// Ý đồ: cho phép ĐỌC công khai (hiện bảng xếp hạng không cần đăng nhập),
+// nhưng CHỈ CHO GHI đúng 1 document của chính người chơi đó (id = playerId tự
+// sinh, lưu trong localStorage — xem getLeaderboardPlayerId() trong leaderboard.js),
+// với dữ liệu hợp lệ: tên tối đa 16 ký tự, điểm là số nguyên không âm trong
+// khoảng hợp lý, VÀ không cho phép tự hạ điểm của chính mình xuống (chặn 1 kiểu
+// gian lận đơn giản: xoá rồi ghi lại điểm thấp hơn để "test" gian lận ngược).
+// Đây KHÔNG phải chống gian lận tuyệt đối (client vẫn tự chọn điểm gửi lên được,
+// xem ghi chú "risk" trong leaderboard.js) — chỉ chặn được các trường hợp thô sơ
+// nhất mà không cần dựng backend riêng.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /leaderboard/{playerId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasOnly(['name', 'score', 'updatedAt'])
+                   && request.resource.data.name is string
+                   && request.resource.data.name.size() > 0
+                   && request.resource.data.name.size() <= 16
+                   && request.resource.data.score is int
+                   && request.resource.data.score >= 0
+                   && request.resource.data.score <= 100000
+                   && (resource == null || request.resource.data.score >= resource.data.score);
+    }
+  }
+}

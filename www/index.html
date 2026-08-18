@@ -15,6 +15,15 @@
        ('local' lúc dev/localhost, 'disabled' ở domain khác) SDK tự vô hiệu hoá êm,
        không lỗi gì cả nên cứ để load ở MỌI môi trường cho đơn giản. -->
   <script src="https://sdk.crazygames.com/crazygames-sdk-v2.js"></script>
+  <!-- Firebase (Bảng Xếp Hạng) — SDK bản "compat" (namespace toàn cục `firebase`,
+       dùng được ngay bằng thẻ script như trên, không cần bundler/npm — khớp cách
+       project này đang chạy thuần HTML/JS). Cấu hình project THẬT nằm ở
+       firebase-config.js (xem hướng dẫn ngay trong file đó) — chưa điền thì
+       leaderboard.js tự nhận ra và im lặng tắt toàn bộ Bảng Xếp Hạng, không lỗi,
+       không ảnh hưởng phần còn lại của game. -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
 </head>
 
 <body>
@@ -61,6 +70,7 @@
 
       <div class="screen-bottom">
         <button class="btn-piffle btn-blue" onclick="showTutorial()" data-i18n="home_howto_btn">📖 Cách Chơi</button>
+        <button class="btn-piffle btn-yellow" onclick="openLeaderboardModal()" data-i18n="home_leaderboard_btn">🏆 Xếp Hạng</button>
       </div>
     </div>
 
@@ -185,6 +195,21 @@
         <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)" data-i18n="booster_shop_buy_coins_btn">🪙 Mua (100)</button>
         <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)" data-i18n="booster_shop_buy_ad_btn">📺 Xem QC</button>
       </div>
+    </div>
+  </div>
+
+  <div id="leaderboard-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="closeLeaderboardModal()" title="Đóng" data-i18n-title="settings_close_title">×</button>
+      <div class="modal-icon">🏆</div>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="leaderboard_title">Bảng Xếp Hạng</h2>
+      <p class="modal-message" data-i18n="leaderboard_subtitle">Xếp theo số màn đã qua</p>
+      <div class="leaderboard-name-form" id="leaderboard-name-form">
+        <input type="text" id="leaderboard-name-input" maxlength="16" data-i18n-placeholder="leaderboard_name_placeholder" placeholder="Đặt biệt danh của bạn">
+        <button class="btn-piffle btn-green" onclick="submitLeaderboardName()" data-i18n="leaderboard_join_btn">Tham Gia</button>
+      </div>
+      <div class="leaderboard-status" id="leaderboard-status" data-i18n="leaderboard_loading">Đang tải...</div>
+      <div class="leaderboard-list" id="leaderboard-list"></div>
     </div>
   </div>
 
@@ -320,6 +345,7 @@
   <div id="level-hint-hand">👉</div>
 
   <script src="ads.js"></script>
+  <script src="leaderboard.js"></script>
   <script src="script.js"></script>
 </body>
 

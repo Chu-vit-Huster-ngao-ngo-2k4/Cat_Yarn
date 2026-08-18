@@ -1593,6 +1593,82 @@
       justify-content: center;
     }
 
+    /* ===== BẢNG XẾP HẠNG ===== */
+    .leaderboard-name-form {
+      display: flex;
+      gap: 8px;
+      margin: 4px 0 14px;
+    }
+
+    .leaderboard-name-form input {
+      flex: 1;
+      min-width: 0;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 2px solid var(--cacao);
+      background: #fff;
+      color: var(--cacao);
+    }
+
+    .leaderboard-status {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--cacao);
+      opacity: 0.7;
+      margin: 10px 0;
+    }
+
+    .leaderboard-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+      max-height: 45vh;
+      overflow-y: auto;
+    }
+
+    .leaderboard-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 2px solid var(--cacao);
+      border-radius: 12px;
+      background: #fff;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-weight: 600;
+      color: var(--cacao);
+    }
+
+    .leaderboard-row-me {
+      background: #fff3cd;
+      border-color: #b8860b;
+    }
+
+    .leaderboard-rank {
+      width: 22px;
+      flex-shrink: 0;
+      text-align: center;
+      opacity: 0.7;
+    }
+
+    .leaderboard-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .leaderboard-score {
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+
     /* ===== DEV CHEAT MENU (chi mo qua thao tac bi mat, xem attachCheatMenuTrigger()) ===== */
     .cheat-row {
       display: flex;

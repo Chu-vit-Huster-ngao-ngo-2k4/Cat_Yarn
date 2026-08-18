@@ -4,6 +4,14 @@ ad_placeholder,Quảng cáo,Advertisement
 home_level_label,Level,Level
 home_play_btn,▶ Chơi,▶ Play
 home_howto_btn,📖 Cách Chơi,📖 How To Play
+home_leaderboard_btn,🏆 Xếp Hạng,🏆 Leaderboard
+leaderboard_title,Bảng Xếp Hạng,Leaderboard
+leaderboard_subtitle,Xếp theo số màn đã qua,Ranked by levels cleared
+leaderboard_name_placeholder,Đặt biệt danh của bạn,Enter your nickname
+leaderboard_join_btn,Tham Gia,Join
+leaderboard_loading,Đang tải...,Loading...
+leaderboard_unavailable,"Chưa có bảng xếp hạng lúc này, thử lại sau nhé!","Leaderboard unavailable right now, try again later!"
+leaderboard_empty,"Chưa có ai trên bảng xếp hạng, hãy là người đầu tiên!","No one on the leaderboard yet, be the first!"
 home_settings_title,Cài đặt,Settings
 game_back_title,Về trang chủ,Back to home
 game_howto_title,Cách chơi,How to play

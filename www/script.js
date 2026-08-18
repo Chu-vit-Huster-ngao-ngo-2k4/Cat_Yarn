@@ -90,6 +90,9 @@ function applyLocale() {
     document.querySelectorAll('[data-i18n-title]').forEach(el => {
         el.title = t(el.dataset.i18nTitle);
     });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
     document.querySelectorAll('.lang-icon').forEach(el => {
         el.textContent = currentLang.toUpperCase();
     });
@@ -170,6 +173,72 @@ function hideHomeSettings() {
 document.getElementById('home-settings-modal').addEventListener('click', (e) => {
     if (e.target.id === 'home-settings-modal') hideHomeSettings();
 });
+
+// ===== BẢNG XẾP HẠNG — UI (logic gửi/lấy điểm nằm ở leaderboard.js) =====
+function openLeaderboardModal() {
+    document.getElementById('leaderboard-modal').classList.add('show');
+    const form = document.getElementById('leaderboard-name-form');
+    const input = document.getElementById('leaderboard-name-input');
+    const hasName = !!getLeaderboardName();
+    form.style.display = hasName ? 'none' : 'flex';
+    if (!hasName) input.value = '';
+    refreshLeaderboardList();
+}
+
+function closeLeaderboardModal() {
+    document.getElementById('leaderboard-modal').classList.remove('show');
+}
+
+document.getElementById('leaderboard-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'leaderboard-modal') closeLeaderboardModal();
+});
+
+function submitLeaderboardName() {
+    const input = document.getElementById('leaderboard-name-input');
+    const name = (input.value || '').trim().slice(0, 16);
+    if (!name) return;
+    saveLeaderboardName(name);
+    document.getElementById('leaderboard-name-form').style.display = 'none';
+    submitLeaderboardScore(completedLevels.size);
+    refreshLeaderboardList();
+}
+
+async function refreshLeaderboardList() {
+    const statusEl = document.getElementById('leaderboard-status');
+    const listEl = document.getElementById('leaderboard-list');
+    listEl.innerHTML = '';
+    statusEl.style.display = 'block';
+    statusEl.textContent = t('leaderboard_loading');
+
+    const { ok, rows, myId } = await fetchLeaderboard();
+    // Modal có thể đã bị đóng trong lúc chờ mạng -> khỏi vẽ nữa cho đỡ giật.
+    if (!document.getElementById('leaderboard-modal').classList.contains('show')) return;
+
+    if (!ok) {
+        statusEl.textContent = t('leaderboard_unavailable');
+        return;
+    }
+    if (!rows.length) {
+        statusEl.textContent = t('leaderboard_empty');
+        return;
+    }
+    statusEl.style.display = 'none';
+    rows.forEach((row, i) => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'leaderboard-row' + (row.id === myId ? ' leaderboard-row-me' : '');
+        const rankEl = document.createElement('span');
+        rankEl.className = 'leaderboard-rank';
+        rankEl.textContent = i + 1;
+        const nameEl = document.createElement('span');
+        nameEl.className = 'leaderboard-name';
+        nameEl.textContent = row.name || '???'; // textContent, không innerHTML -> tránh XSS từ tên người chơi khác
+        const scoreEl = document.createElement('span');
+        scoreEl.className = 'leaderboard-score';
+        scoreEl.textContent = row.score || 0;
+        rowEl.append(rankEl, nameEl, scoreEl);
+        listEl.appendChild(rowEl);
+    });
+}
 
 document.getElementById('settings-modal').addEventListener('click', (e) => {
     if (e.target.id === 'settings-modal') hideSettings();
@@ -1506,6 +1575,7 @@ function saveProgress() {
 function markLevelCompleted(idx) {
     completedLevels.add(idx);
     saveProgress();
+    if (typeof submitLeaderboardScore === 'function') submitLeaderboardScore(completedLevels.size);
 
     // "Khoảnh khắc ăn mừng" nên hiếm/đặc biệt (xem ghi chú notifyHappyMoment() trong
     // ads.js) -> chỉ gọi đúng lúc chơi hết TOÀN BỘ level hiện có, không phải mỗi màn.
@@ -3459,5 +3529,6 @@ function attachButtonClickDelay() {
     attachButtonPressFeedback();
     attachButtonClickDelay();
     initAds(); // không await — banner load nền, không được làm chậm màn Home
+    initLeaderboard(); // không await, giống initAds() — im lặng vô hiệu hoá nếu chưa cấu hình Firebase
 })();
   
