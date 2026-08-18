@@ -296,6 +296,118 @@
       padding-bottom: 16px;
     }
 
+    /* Thanh 3 tab đáy màn Home: Xếp Hạng | Trang Chủ | Cách Chơi — KHÁC hẳn dáng
+       nút "piffle" thường (viền dày rời + box-shadow khối nổi hẳn lên) của mọi
+       nút khác trong game: 3 tab nằm SÁT NHAU (không khoảng cách), nền kéo dài
+       liền xuống tới chân khu vực màn hình (không bo góc đáy, không có "khoảng
+       hở" lộ nền phía sau) — như 1 dải cổng liền khối, không phải 3 nút rời.
+       CẢ 3 bằng nhau lúc bình thường; tab nào ĐANG ĐƯỢC CHỌN (.home-tab-active,
+       xem setActiveHomeTab() trong script.js) mới to hơn + trồi cao hơn + tô
+       vàng — dùng align-items:flex-end để tab đang chọn "trồi" lên tự nhiên
+       bằng margin-bottom âm của chính nó, giữ nguyên logic cũ. */
+    .home-tabbar {
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 0;
+      padding: 0 12px;
+      padding-bottom: 0; /* ghi đè .screen-bottom (16px) — tab phải chạm liền chân khu vực màn hình, không hở khoảng nền phía dưới */
+    }
+
+    .home-tab {
+      position: relative; /* để ::after (đuôi kéo dài xuống chân màn hình thật) định vị theo đúng khung tab này */
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 3px;
+      padding: 12px 4px 22px; /* đáy dư ra hẳn — phần dư này "cắm" xuống tới chân màn hình thay vì lơ lửng */
+      font-family: 'Fredoka', cursive, sans-serif;
+      background: var(--bg-cream);
+      border: 3px solid var(--cacao);
+      border-bottom: none; /* đáy KHÔNG viền — liền mạch với nền phía dưới, không phải 1 nút rời khép kín */
+      /* Vòm cong ở đỉnh, đáy VUÔNG hẳn (không bo) — khác nút piffle luôn bo đều 4 góc. */
+      border-radius: 50% 50% 0 0 / 40% 40% 0 0;
+      box-shadow: none; /* KHÔNG có box-shadow khối rời như nút piffle — đây là 1 mảng nền liền, không phải nút nổi */
+      color: var(--cacao);
+      cursor: pointer;
+      outline: none;
+      transition: all 0.1s ease;
+    }
+
+    /* "Đuôi" kéo dài nền tab xuống TỚI TẬN ĐÁY MÀN HÌNH THẬT (qua khỏi cả vùng
+       #ad-placeholder phía dưới), không dừng lại lơ lửng ở mép .home-tabbar như
+       trước — dùng position:absolute (không đụng layout, .screen-middle phía
+       trên không bị co lại) + background:inherit để tự động ăn ĐÚNG màu nền hiện
+       tại của từng tab (cream lúc thường, vàng lúc .home-tab-active), không cần
+       khai báo riêng cho từng trạng thái. 160px dư dả để phủ hết chiều cao thật
+       tế của #ad-placeholder (90px + safe-area) trên mọi máy — thừa ra thì bị
+       body{overflow:hidden} tự cắt gọn, không lỗi gì. Sau này banner ads thật
+       (native, luôn nổi trên cùng) sẽ che khuất đúng phần đuôi thừa này, không
+       cần lo hiển thị sai ở vùng đó. */
+    .home-tab::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: -3px;
+      right: -3px;
+      height: 160px;
+      background: inherit;
+      pointer-events: none;
+    }
+
+    /* 2 tab bên cạnh nhau share đúng 1 đường viền (không bị viền đôi dày gấp 2 ở
+       chỗ giáp nhau) — tab ở giữa bỏ viền trái/phải riêng, dựa vào viền phải của
+       tab trước + viền trái của tab sau là đủ. */
+    .home-tab + .home-tab {
+      border-left: none;
+    }
+
+    .home-tab:active,
+    .home-tab.btn-pressed {
+      transform: translateY(4px);
+    }
+
+    .home-tab-icon {
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+
+    .home-tab-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    /* Hiệu ứng chuyển tab: pane vừa hiện ra fade + trượt nhẹ từ dưới lên (xem
+       switchHomeTab() trong script.js — tự ép restart animation mỗi lần chuyển). */
+    @keyframes home-pane-in {
+      0% { opacity: 0; transform: translateY(14px) scale(0.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .home-pane-anim {
+      animation: home-pane-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Tab ĐANG CHỌN — to hơn + trồi cao hơn + tô vàng, ĐỘNG theo đúng tab vừa
+       bấm (setActiveHomeTab()), không cố định vào 1 vị trí như trước — GIỮ
+       NGUYÊN logic "trồi lên khi ấn" cũ, chỉ đổi phần hình dáng/màu nền. */
+    .home-tab-active {
+      flex: 1.15;
+      padding-top: 16px;
+      margin-bottom: 14px; /* đẩy trồi lên cao hơn 2 tab còn lại (align-items:flex-end ở .home-tabbar) */
+      background: var(--btn-yellow);
+      z-index: 1;
+    }
+
+    .home-tab-active .home-tab-icon {
+      font-size: 1.9rem;
+    }
+
+    .home-tab-active .home-tab-label {
+      font-size: 0.74rem;
+    }
+
     /* Thanh trên khi đang chơi: mũi tên lùi về Home - tên level - nhóm icon (❓/🔊) */
     /* .home-topbar dùng chung layout với .game-topbar để nút Cài Đặt ở màn Home
        rơi đúng y hệt vị trí (góc trên phải) như nút Cài Đặt trong màn Chơi. */
@@ -307,6 +419,14 @@
       width: min(380px, 100%);
       margin: 0 0 12px;
       z-index: 10;
+    }
+
+    /* Riêng màn Home: bên trái giờ có 2 tầng (khung xu + nút avatar bên dưới —
+       xem .home-topbar-left-stack), cao hơn hẳn nút Cài Đặt bên phải. Đổi
+       align-items thành flex-start để nút Cài Đặt LUÔN neo ngang hàng với khung
+       xu (tầng trên cùng bên trái), không bị canh giữa theo chiều cao cả cột. */
+    .home-topbar {
+      align-items: flex-start;
     }
 
     /* 2 bên trái/phải luôn chiếm không gian BẰNG NHAU (flex:1) dù số lượng nút khác
@@ -392,6 +512,50 @@
 
     .coin-badge.pop {
       animation: coin-badge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Cột góc trên-trái màn Home: khung xu rồi tới nút avatar ngay bên dưới —
+       chỉ riêng màn Home mới xếp dọc kiểu này (KHÔNG đụng .topbar-side-left dùng
+       chung với màn Chơi, tránh phá layout mũi tên "về Home" ở đó). */
+    /* position:relative để nút avatar (absolute) định vị theo ĐÚNG cột này, không
+       theo cả .home-topbar hay .screen-top. */
+    .home-topbar-left-stack {
+      position: relative;
+    }
+
+    /* Nút avatar — lối tắt mở modal Hồ Sơ, hiện avatar hiện tại của người chơi
+       (xem updateHomeAvatarBtn() trong script.js). CỐ Ý absolute (không nằm
+       trong flex flow của .home-topbar-left-stack/.home-topbar) -> nổi bên dưới
+       khung xu mà KHÔNG kéo giãn chiều cao topbar, tránh đẩy khối Level/Chơi ở
+       giữa màn hình xuống theo (đã từng bị vậy khi còn xếp dọc bằng flex thường). */
+    .home-avatar-btn {
+      position: absolute;
+      top: calc(100% + 14px);
+      left: 0;
+      width: 54px;
+      height: 54px;
+      padding: 0;
+      border: 3px solid #000000;
+      border-radius: 11px;
+      background: #ffffff;
+      box-shadow: 0 3px 0 var(--cacao);
+      overflow: hidden;
+      cursor: pointer;
+      display: block;
+    }
+
+    .home-avatar-btn:active,
+    .home-avatar-btn.btn-pressed {
+      transform: translateY(3px);
+      box-shadow: 0 0 0 var(--cacao);
+    }
+
+    .home-avatar-btn-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: 50% 0%;
+      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
     }
 
     .icon-btn {
@@ -1593,22 +1757,239 @@
       justify-content: center;
     }
 
-    /* ===== BẢNG XẾP HẠNG ===== */
+    /* ===== BẢNG XẾP HẠNG — cùng "ngôn ngữ" piffle với nút/thẻ khác trong game:
+       viền dày var(--cacao), box-shadow đổ khối (không mờ/blur), bo tròn lớn.
+       Là 1 pane trong màn Home (tab "Xếp Hạng"), KHÔNG còn là modal -> chiếm hết
+       chiều cao còn lại, danh sách tự cuộn bên trong thay vì cả trang cuộn. ===== */
+    .home-leaderboard-pane {
+      justify-content: flex-start;
+      width: 100%;
+      min-height: 0;
+      overflow: hidden;
+      gap: 4px;
+    }
+
+    /* Tab Cách Chơi — nội dung tĩnh (.tutorial-tips dùng chung với #tutorial-modal),
+       tự cuộn dọc nếu tràn thay vì đè lên thanh tab đáy màn hình. */
+    .home-howto-pane {
+      justify-content: flex-start;
+      width: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      padding-top: 4px; /* chữa "chữ nằm hơi cao" — chừa chút khoảng trước khi vào thẻ */
+    }
+
+    /* Trong popup #tutorial-modal, .tutorial-tips ăn theo nền cream của .modal-card
+       bọc ngoài -> chữ nâu (--cacao) luôn tương phản đủ rõ. Ở TAB này thì không có
+       modal-card nào bọc -> .tutorial-tips nằm thẳng lên nền màn hình, mà nền đó
+       chuyển ĐEN khi bật giao diện tối (xem body.dark-mode) trong khi chữ vẫn màu
+       nâu cố định -> gần như vô hình. Tự bọc riêng 1 thẻ nền cream ở đây để LUÔN
+       đủ tương phản bất kể sáng/tối, không phụ thuộc modal-card nữa. */
+    .home-howto-pane .tutorial-tips {
+      width: 100%;
+      margin: 0;
+      padding: 16px;
+      background: var(--bg-cream);
+      border: 4px solid var(--cacao);
+      border-radius: 20px;
+      box-shadow: 0 5px 0 var(--board-shadow);
+    }
+
+    .leaderboard-subtitle {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--cacao);
+      opacity: 0.75;
+      margin: 0 0 10px;
+    }
+
+    /* Thẻ tóm tắt trên cùng modal Hồ Sơ: avatar + tên (có icon bút chì) nằm
+       CHUNG 1 hàng — tách khỏi lưới chọn avatar bên dưới, giống bố cục quen
+       thuộc "avatar lớn + tên cạnh bên" ở nhiều game khác. */
+    .profile-summary-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      margin: 4px 0 18px;
+    }
+
+    /* Avatar preview lớn trong modal Hồ Sơ (#profile-modal) — TÁCH khung (đứng
+       yên, clip) và ảnh (mới zoom) ra 2 lớp riêng, KHÔNG gộp vào 1 thẻ img duy
+       nhất: nếu để transform:scale() lẫn border/overflow:hidden trên CÙNG 1
+       phần tử, cả khung lẫn ảnh phình to cùng lúc (transform không chiếm thêm
+       layout) -> tràn ra ngoài đè lên phần tử bên cạnh thay vì bị crop gọn
+       trong khung — đúng lỗi "ảnh to và lệch" đã gặp. */
+    .profile-modal-avatar-frame {
+      display: block;
+      flex-shrink: 0;
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      border: 4px solid #000000;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .profile-modal-avatar-preview {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: 50% 0%;
+      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+    }
+
+    .profile-name-field {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .profile-name-field input {
+      width: 100%;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 10px 38px 10px 12px;
+      border-radius: 14px;
+      border: 3px solid var(--cacao);
+      box-shadow: 0 3px 0 var(--board-shadow);
+      background: #fff;
+      color: var(--cacao);
+    }
+
+    /* Emoji tự thân render TO hơn hẳn chữ thường cùng font-size (đặc thù font hệ
+       thống vẽ emoji, không phải lỗi CSS) -> phải để font-size nhỏ hơn nhiều so
+       với chữ trong input mới ra kích thước cân đối, không đè lên placeholder. */
+    .profile-name-edit-icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.7rem;
+      line-height: 1;
+      pointer-events: none; /* chỉ trang trí, không chặn bấm vào input phía dưới */
+    }
+
+    /* Hàng tab Avatar/Khung — chỉ tab Avatar hoạt động (chưa có cơ chế khung
+       riêng), tab Khung khoá + mờ đi giống dáng "sắp có" đã dùng ở Settings. */
+    .profile-tabs {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .profile-tab {
+      flex: 1;
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 8px 4px;
+      border: 3px solid var(--cacao);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--cacao);
+      cursor: pointer;
+    }
+
+    .profile-tab-active {
+      background: var(--btn-blue);
+      color: #ffffff;
+      box-shadow: 0 3px 0 var(--btn-blue-shadow);
+    }
+
+    .profile-tab:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    /* Lưới chọn avatar — CỠ CỐ ĐỊNH (không kéo giãn lấp đầy hàng) nên chỉ có
+       vài avatar vẫn nằm gọn bên trái, không tạo khoảng trống lệch lạc như grid
+       chia đều cột lúc chưa đủ lấp hàng. Avatar đang chọn viền xanh lá
+       (--btn-green) + dấu tick, giống dáng "đang chọn" quen thuộc ở game khác. */
+    .avatar-picker-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .avatar-pick {
+      position: relative;
+      width: 64px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .avatar-pick-frame {
+      display: block;
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 3px solid var(--cacao);
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .avatar-pick-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: 50% 0%;
+      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+    }
+
+    .avatar-pick-selected .avatar-pick-frame {
+      border-color: var(--btn-green);
+      box-shadow: 0 0 0 2px var(--btn-green);
+    }
+
+    .avatar-pick-check {
+      display: none;
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--btn-green);
+      color: #ffffff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--bg-cream);
+    }
+
+    .avatar-pick-selected .avatar-pick-check {
+      display: flex;
+    }
+
     .leaderboard-name-form {
       display: flex;
       gap: 8px;
-      margin: 4px 0 14px;
+      width: 100%;
+      flex-shrink: 0;
+      margin-bottom: 6px;
     }
 
     .leaderboard-name-form input {
       flex: 1;
       min-width: 0;
       font-family: 'Fredoka', cursive, sans-serif;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
-      padding: 8px 10px;
-      border-radius: 10px;
-      border: 2px solid var(--cacao);
+      padding: 9px 12px;
+      border-radius: 14px;
+      border: 3px solid var(--cacao);
+      box-shadow: 0 3px 0 var(--board-shadow);
       background: #fff;
       color: var(--cacao);
     }
@@ -1619,41 +2000,96 @@
       font-weight: 600;
       color: var(--cacao);
       opacity: 0.7;
-      margin: 10px 0;
+      margin: 8px 0;
+      flex-shrink: 0;
     }
 
     .leaderboard-list {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       text-align: left;
-      max-height: 45vh;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
       overflow-y: auto;
+      padding: 2px 4px 6px; /* chừa chỗ cho box-shadow của hàng khỏi bị cắt khi cuộn */
+    }
+
+    /* Mỗi hàng tự fade + trượt vào riêng, LỆCH thời điểm nhau (animation-delay đặt
+       theo index ngay trong JS — xem refreshLeaderboardList()) -> cảm giác hiện lần
+       lượt từ trên xuống thay vì cả danh sách bụp ra cùng lúc. "backwards" giữ hàng
+       ở trạng thái ẩn (opacity 0) trong lúc CHỜ tới lượt delay của nó, không loé
+       hình đầy đủ ra trước rồi mới "biến mất" để chạy animation. */
+    @keyframes leaderboard-row-in {
+      0% { opacity: 0; transform: translateY(12px); }
+      100% { opacity: 1; transform: translateY(0); }
     }
 
     .leaderboard-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 8px 12px;
-      border: 2px solid var(--cacao);
-      border-radius: 12px;
-      background: #fff;
+      padding: 9px 12px;
+      border: 3px solid var(--cacao);
+      border-radius: 16px;
+      background: var(--cell-bg);
+      box-shadow: 0 3px 0 var(--cell-shadow);
       font-family: 'Fredoka', cursive, sans-serif;
       font-weight: 600;
       color: var(--cacao);
+      animation: leaderboard-row-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
     }
 
+    /* Top 3 tô màu huy chương thay vì huy chương chỉ nằm ở icon cho nổi hẳn hàng. */
+    .leaderboard-row-1 { background: var(--btn-yellow); box-shadow: 0 3px 0 var(--btn-yellow-shadow); }
+    .leaderboard-row-2 { background: #e5e5e5; box-shadow: 0 3px 0 #b5b5b5; }
+    .leaderboard-row-3 { background: #f0c398; box-shadow: 0 3px 0 #c98a4e; }
+
+    /* Hàng của chính mình luôn nổi bật nhất bằng viền/nền hồng game hay dùng
+       (--btn-pink), CHỒNG lên cả màu huy chương nếu vừa lọt top 3. */
     .leaderboard-row-me {
-      background: #fff3cd;
-      border-color: #b8860b;
+      background: var(--btn-pink);
+      border-color: var(--btn-pink-shadow);
+      box-shadow: 0 3px 0 var(--btn-pink-shadow);
+      color: #ffffff;
     }
 
     .leaderboard-rank {
-      width: 22px;
+      width: 26px;
       flex-shrink: 0;
       text-align: center;
-      opacity: 0.7;
+      font-size: 1rem;
+      opacity: 0.75;
+    }
+
+    .leaderboard-row-1 .leaderboard-rank,
+    .leaderboard-row-2 .leaderboard-rank,
+    .leaderboard-row-3 .leaderboard-rank {
+      font-size: 1.15rem;
+      opacity: 1;
+    }
+
+    .leaderboard-avatar {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px; /* vuông (bo nhẹ góc cho khớp phong cách piffle), KHÔNG tròn */
+      background: #fff;
+      border: 2px solid #000000;
+      overflow: hidden; /* khung đứng yên -> "zoom" ảnh bên trong (.leaderboard-avatar-img) mà không phình khung */
+      display: block;
+    }
+
+    .leaderboard-avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      /* Neo (transform-origin) ở mép TRÊN, không phải giữa -> zoom vào chỉ đẩy phần
+         ĐÁY ảnh trồi ra ngoài khung (bị overflow:hidden cắt), mép trên đứng yên.
+         scale(1.33) = hiện đúng 3/4 phần trên của ảnh, cắt bỏ 1/4 phần đáy. */
+      transform-origin: 50% 0%;
+      transform: scale(1.33);
     }
 
     .leaderboard-name {
@@ -1667,6 +2103,155 @@
     .leaderboard-score {
       flex-shrink: 0;
       font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 10px;
+      background: rgba(74, 48, 34, 0.1);
+    }
+
+    .leaderboard-row-me .leaderboard-score {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Bục top 3 (hạng 2 - 1 - 3 từ trái sang, hạng 1 ở giữa cao/nổi bật nhất) —
+       dùng `order` để đặt ĐÚNG THỨ TỰ HIỂN THỊ khác thứ tự trong DOM (thẻ hạng 1
+       luôn được thêm đầu tiên vào podiumEl nên .podium-card-1 phải tự nhận diện
+       qua class, không dựa vào vị trí DOM). Rỗng (0 hàng) thì tự không chiếm chỗ
+       gì cả vì JS chỉ append đúng số thẻ có dữ liệu thật (0-3 thẻ).
+       Trống nếu chưa đủ 3 người trên bảng xếp hạng cũng không lỗi gì -> hàng nào
+       không có row tương ứng thì đơn giản là không được JS tạo ra. */
+    .leaderboard-podium {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      width: 100%;
+      flex-shrink: 0;
+      margin-bottom: 14px;
+    }
+
+    .podium-card {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 4px 12px;
+      border: 3px solid var(--cacao);
+      border-radius: 16px 16px 8px 8px;
+      color: #ffffff;
+      text-align: center;
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+    .podium-card-1 {
+      order: 2;
+      background: var(--btn-pink);
+      box-shadow: 0 4px 0 var(--btn-pink-shadow);
+      padding-top: 4px;
+      z-index: 1;
+    }
+
+    .podium-card-2 {
+      order: 1;
+      background: var(--btn-blue);
+      box-shadow: 0 4px 0 var(--btn-blue-shadow);
+      margin-bottom: -14px; /* thấp hơn hạng 1 1 chút, đúng dáng bục thi đấu */
+    }
+
+    .podium-card-3 {
+      order: 3;
+      background: var(--btn-green);
+      box-shadow: 0 4px 0 var(--btn-green-shadow);
+      margin-bottom: -14px;
+    }
+
+    .podium-rank {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: #ffffff;
+      color: var(--cacao);
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 6px;
+      border: 2px solid var(--cacao);
+    }
+
+    /* Hạng 1 CHỈ hiện vương miện, không cần huy hiệu số — nhưng vẫn GIỮ CHỖ
+       (visibility:hidden, không display:none) để thẻ hạng 1 cao bằng đúng dáng
+       cần có so với 2 thẻ bên cạnh, không bị hụt chiều cao. */
+    .podium-rank-hidden {
+      visibility: hidden;
+    }
+
+    .podium-avatar-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .podium-avatar {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border-radius: 8px; /* vuông (bo nhẹ góc cho khớp phong cách piffle), KHÔNG tròn */
+      background: #ffffff;
+      border: 3px solid #000000;
+      overflow: hidden; /* khung đứng yên -> "zoom" ảnh bên trong (.podium-avatar-img) mà không phình khung */
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .podium-avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      /* Xem giải thích ở .leaderboard-avatar-img — neo mép trên rồi zoom(1.33) để chỉ
+         hiện đúng 3/4 phần trên của ảnh, cắt bỏ phần đáy. */
+      transform-origin: 50% 0%;
+      transform: scale(1.33);
+    }
+
+    .podium-card-1 .podium-avatar {
+      width: 56px;
+      height: 56px;
+    }
+
+    /* Ảnh gốc (icon/crown.png) có viền trong suốt rộng quanh hình vẽ thật -> thu nhỏ
+       hẳn xuống rồi đẩy lên đội đúng đỉnh avatar hạng 1, hơi nghiêng cho sinh động. */
+    .podium-crown {
+      position: absolute;
+      top: -26px;
+      left: 50%;
+      width: 38px;
+      height: auto;
+      transform: translateX(-50%) rotate(-10deg);
+      filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.35));
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .podium-name {
+      font-weight: 700;
+      font-size: 0.8rem;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .podium-score {
+      margin-top: 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.28);
+      padding: 3px 9px;
+      border-radius: 10px;
+      white-space: nowrap;
     }
 
     /* ===== DEV CHEAT MENU (chi mo qua thao tac bi mat, xem attachCheatMenuTrigger()) ===== */

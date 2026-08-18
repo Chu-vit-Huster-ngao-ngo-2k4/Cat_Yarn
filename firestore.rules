@@ -6,23 +6,34 @@
 // nhưng CHỈ CHO GHI đúng 1 document của chính người chơi đó (id = playerId tự
 // sinh, lưu trong localStorage — xem getLeaderboardPlayerId() trong leaderboard.js),
 // với dữ liệu hợp lệ: tên tối đa 16 ký tự, điểm là số nguyên không âm trong
-// khoảng hợp lý, VÀ không cho phép tự hạ điểm của chính mình xuống (chặn 1 kiểu
-// gian lận đơn giản: xoá rồi ghi lại điểm thấp hơn để "test" gian lận ngược).
+// khoảng hợp lý, avatar (nếu có) phải nằm trong danh sách file avatar THẬT SỰ tồn
+// tại (chặn gửi lên 1 chuỗi bậy bạ để hiện linh tinh), VÀ không cho phép tự hạ
+// điểm của chính mình xuống (chặn 1 kiểu gian lận đơn giản: xoá rồi ghi lại điểm
+// thấp hơn để "test" gian lận ngược).
 // Đây KHÔNG phải chống gian lận tuyệt đối (client vẫn tự chọn điểm gửi lên được,
 // xem ghi chú "risk" trong leaderboard.js) — chỉ chặn được các trường hợp thô sơ
 // nhất mà không cần dựng backend riêng.
+//
+// LƯU Ý: bỏ ảnh avatar MỚI vào icon/ava/ rồi chạy
+// `python tools/build_avatar_list.py` (xem leaderboard.js) chỉ tự cập nhật
+// được PHÍA CLIENT (PLAYER_AVATAR_FILES trong avatars.js) — rules Firestore là
+// text tĩnh, KHÔNG tự đọc thư mục được, nên PHẢI tự tay thêm đúng tên file mới
+// vào danh sách trong ('avaPig.png', 'avaHamster.png', ...) bên dưới rồi Publish
+// lại trên Firebase Console, không thì avatar mới bị Firestore từ chối lúc ghi.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /leaderboard/{playerId} {
       allow read: if true;
-      allow write: if request.resource.data.keys().hasOnly(['name', 'score', 'updatedAt'])
+      allow write: if request.resource.data.keys().hasOnly(['name', 'score', 'avatar', 'updatedAt'])
                    && request.resource.data.name is string
                    && request.resource.data.name.size() > 0
                    && request.resource.data.name.size() <= 16
                    && request.resource.data.score is int
                    && request.resource.data.score >= 0
                    && request.resource.data.score <= 100000
+                   && (!('avatar' in request.resource.data)
+                       || request.resource.data.avatar in ['avaPig.png', 'avaHamster.png', 'avaFish.png'])
                    && (resource == null || request.resource.data.score >= resource.data.score);
     }
   }

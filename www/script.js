@@ -174,45 +174,228 @@ document.getElementById('home-settings-modal').addEventListener('click', (e) => 
     if (e.target.id === 'home-settings-modal') hideHomeSettings();
 });
 
-// ===== BẢNG XẾP HẠNG — UI (logic gửi/lấy điểm nằm ở leaderboard.js) =====
-function openLeaderboardModal() {
-    document.getElementById('leaderboard-modal').classList.add('show');
-    const form = document.getElementById('leaderboard-name-form');
-    const input = document.getElementById('leaderboard-name-input');
-    const hasName = !!getLeaderboardName();
-    form.style.display = hasName ? 'none' : 'flex';
-    if (!hasName) input.value = '';
-    refreshLeaderboardList();
+// ===== HỒ SƠ NGƯỜI CHƠI (tên + avatar) — modal riêng CHUNG cho cả game, mở từ
+// nút avatar góc trên-trái màn Home. KHÔNG thuộc về tab Xếp Hạng: bảng xếp hạng
+// chỉ ĐỌC LẠI đúng tên/avatar đã lưu ở đây (qua leaderboard.js) để hiện lên danh
+// sách, không có form chỉnh sửa riêng của nó. =====
+function openProfileModal() {
+    document.getElementById('profile-name-input').value = getPlayerName();
+    renderAvatarPicker();
+    updateProfileModalAvatarPreview();
+    document.getElementById('profile-modal').classList.add('show');
 }
 
-function closeLeaderboardModal() {
-    document.getElementById('leaderboard-modal').classList.remove('show');
+function closeProfileModal() {
+    document.getElementById('profile-modal').classList.remove('show');
 }
 
-document.getElementById('leaderboard-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'leaderboard-modal') closeLeaderboardModal();
+document.getElementById('profile-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'profile-modal') closeProfileModal();
 });
 
-function submitLeaderboardName() {
-    const input = document.getElementById('leaderboard-name-input');
+function updateProfileModalAvatarPreview() {
+    const file = getPlayerAvatar() || pickDefaultPlayerAvatar(getPlayerId());
+    document.getElementById('profile-modal-avatar-preview').src = playerAvatarPath(file);
+}
+
+// Vẽ lưới avatar để chọn (xem PLAYER_AVATAR_FILES trong leaderboard.js) — avatar
+// đang chọn viền xanh lá + dấu tick, giống kiểu chọn avatar quen thuộc ở nhiều
+// game khác.
+function renderAvatarPicker() {
+    const gridEl = document.getElementById('avatar-picker-grid');
+    gridEl.innerHTML = '';
+    const selected = getPlayerAvatar() || pickDefaultPlayerAvatar(getPlayerId());
+    PLAYER_AVATAR_FILES.forEach(file => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'avatar-pick' + (file === selected ? ' avatar-pick-selected' : '');
+        btn.onclick = () => selectPlayerAvatar(file);
+        const frame = document.createElement('span');
+        frame.className = 'avatar-pick-frame';
+        const img = document.createElement('img');
+        img.className = 'avatar-pick-img';
+        img.src = playerAvatarPath(file);
+        img.alt = '';
+        frame.appendChild(img);
+        const check = document.createElement('span');
+        check.className = 'avatar-pick-check';
+        check.textContent = '✔';
+        btn.append(frame, check);
+        gridEl.appendChild(btn);
+    });
+}
+
+function selectPlayerAvatar(file) {
+    savePlayerAvatar(file);
+    renderAvatarPicker();
+    updateProfileModalAvatarPreview();
+    updateHomeAvatarBtn();
+    // Đã có tên (đang hiện trên bảng xếp hạng rồi) -> đổi avatar có hiệu lực NGAY
+    // trên đó luôn, khỏi bắt bấm Lưu lại mới cập nhật.
+    if (getPlayerName()) submitLeaderboardScore(completedLevels.size);
+}
+
+function savePlayerProfile() {
+    const input = document.getElementById('profile-name-input');
     const name = (input.value || '').trim().slice(0, 16);
     if (!name) return;
-    saveLeaderboardName(name);
-    document.getElementById('leaderboard-name-form').style.display = 'none';
+    savePlayerName(name);
+    if (!getPlayerAvatar()) savePlayerAvatar(pickDefaultPlayerAvatar(getPlayerId()));
+    updateHomeAvatarBtn();
     submitLeaderboardScore(completedLevels.size);
-    refreshLeaderboardList();
+    closeProfileModal();
+    // Vừa lưu hồ sơ có thể vừa khiến mình LẦN ĐẦU xuất hiện trên bảng xếp hạng
+    // (trước đó chưa có tên = chưa được gửi lên) -> vẽ lại danh sách nếu đang mở
+    // đúng tab đó để thấy ngay, không cần thoát ra vào lại mới cập nhật.
+    if (currentHomeTab === 'leaderboard') refreshLeaderboardList();
+}
+
+// ===== BẢNG XẾP HẠNG — UI (logic gửi/lấy điểm nằm ở leaderboard.js) =====
+// Là 1 TAB đổi nội dung ngay trong màn Home (như 2 tab kia), KHÔNG phải popup —
+// tab đang chọn tô màu xanh (.home-tab-active) y hệt dáng tab "Trang Chủ" cũ.
+let currentHomeTab = 'home';
+
+// 3 nút tab đều BẰNG NHAU — tab nào vừa được bấm thì tab đó (và chỉ đúng 1 tab
+// đó) mới trồi cao lên + tô vàng (xem .home-tab-active trong style.css), không
+// cố định vào riêng vị trí nào.
+function setActiveHomeTab(id) {
+    ['home-tab-home', 'home-tab-leaderboard', 'home-tab-howto'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.classList.toggle('home-tab-active', elId === 'home-tab-' + id);
+        // .home-tab-active là dáng TRỒI LÊN, ngược hẳn hướng .btn-pressed (lõm/đẩy
+        // xuống 4px giữ tạm trong lúc chờ — xem release() trong
+        // attachButtonPressFeedback()) -> phải tự dọn .btn-pressed NGAY lúc này,
+        // đúng thời điểm trở thành active, không thể chờ release() ở lần bấm KHÁC
+        // dọn hộ (chờ vậy tab sẽ bị kẹt lõm xuống 4px chồng lên dáng trồi lên, tới
+        // tận lúc người chơi bấm thứ gì đó khác mới hết).
+        el.classList.remove('btn-pressed');
+    });
+}
+
+// Cách Chơi giờ là 1 TAB xem lại nội dung tĩnh (giống hệt #tutorial-modal, chỉ
+// khác cách hiện) — KHÔNG đụng gì tới luồng popup #tutorial-modal, vẫn dùng
+// riêng cho lần đầu vào game (maybeShowTutorialOnFirstVisit()) và nút ❓ trong
+// lúc chơi (showTutorial() trong màn Chơi), 2 luồng đó CỐ Ý giữ nguyên popup.
+const HOME_PANE_IDS = { home: 'home-pane-home', leaderboard: 'home-pane-leaderboard', howto: 'home-pane-howto' };
+
+function switchHomeTab(tab) {
+    if (tab === currentHomeTab) return;
+    currentHomeTab = tab;
+    Object.entries(HOME_PANE_IDS).forEach(([key, id]) => {
+        document.getElementById(id).style.display = key === tab ? 'flex' : 'none';
+    });
+    setActiveHomeTab(tab);
+    // Nút avatar (mở Hồ Sơ) chỉ có ý nghĩa ở tab Trang Chủ — ẩn đi khi đang xem
+    // Xếp Hạng/Cách Chơi, tránh hiểu lầm là nút chung cho mọi tab.
+    document.getElementById('home-avatar-btn').style.display = tab === 'home' ? 'block' : 'none';
+
+    // Hiệu ứng chuyển tab: pane vừa hiện ra fade+trượt nhẹ vào (xem @keyframes
+    // home-pane-in) — bỏ rồi thêm lại class + ép reflow (offsetWidth) để animation
+    // CHẮC CHẮN chạy lại mỗi lần chuyển, kể cả bấm đi bấm lại cùng 1 tab liên tục.
+    const activePane = document.getElementById(HOME_PANE_IDS[tab]);
+    activePane.classList.remove('home-pane-anim');
+    void activePane.offsetWidth;
+    activePane.classList.add('home-pane-anim');
+
+    if (tab === 'leaderboard') refreshLeaderboardList();
+}
+
+// Danh sách avatar (PLAYER_AVATAR_FILES), đường dẫn ảnh (playerAvatarPath()) và
+// avatar mặc định theo hash playerId (pickDefaultPlayerAvatar()) đều định nghĩa
+// bên leaderboard.js — dùng chung cho cả lưới CHỌN avatar (renderAvatarPicker())
+// lẫn việc hiện avatar CỦA NGƯỜI KHÁC trên bảng xếp hạng (buildLeaderboardRow()).
+
+const RANK_MEDALS = ['🥇', '🥈', '🥉'];
+
+function buildLeaderboardRow(row, rank, myId, animate) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'leaderboard-row';
+    if (animate) {
+        // Hiện lần lượt từng hàng thay vì cả danh sách bụp ra cùng lúc (xem @keyframes
+        // leaderboard-row-in) — chặn trần (min) ở 260ms để danh sách dài (top 50)
+        // không bắt người chơi chờ quá lâu mới thấy hết hàng cuối.
+        rowEl.style.animationDelay = Math.min((rank - 1) * 30, 260) + 'ms';
+    }
+    if (rank <= 3) rowEl.classList.add('leaderboard-row-' + rank); // tô màu huy chương top 3
+    if (row.id === myId) rowEl.classList.add('leaderboard-row-me'); // hàng của mình luôn nổi nhất, kể cả khi trùng top 3
+    const rankEl = document.createElement('span');
+    rankEl.className = 'leaderboard-rank';
+    rankEl.textContent = rank <= 3 ? RANK_MEDALS[rank - 1] : rank;
+    const avatarEl = document.createElement('span');
+    avatarEl.className = 'leaderboard-avatar';
+    const avatarImg = document.createElement('img');
+    avatarImg.className = 'leaderboard-avatar-img';
+    avatarImg.src = playerAvatarPath(row.avatar || pickDefaultPlayerAvatar(row.id));
+    avatarImg.alt = '';
+    avatarEl.appendChild(avatarImg);
+    const nameEl = document.createElement('span');
+    nameEl.className = 'leaderboard-name';
+    nameEl.textContent = row.name || '???'; // textContent, không innerHTML -> tránh XSS từ tên người chơi khác
+    const scoreEl = document.createElement('span');
+    scoreEl.className = 'leaderboard-score';
+    scoreEl.textContent = row.score || 0;
+    rowEl.append(rankEl, avatarEl, nameEl, scoreEl);
+    return rowEl;
+}
+
+// Bục top 3 kiểu "podium" (hạng 2 - 1 - 3 từ trái sang, hạng 1 ở giữa nổi bật nhất)
+// nằm phía trên danh sách đầy đủ — danh sách bên dưới vẫn liệt kê lại từ hạng 1,
+// bục chỉ là phần tóm tắt trực quan, không thay thế danh sách.
+function buildLeaderboardPodiumCard(row, rank) {
+    const card = document.createElement('div');
+    card.className = 'podium-card podium-card-' + rank;
+    // Hạng 1 CHỈ hiện vương miện, KHÔNG hiện thêm huy hiệu số "1" (đã đủ rõ là
+    // hạng nhất qua cái vương miện rồi, số 1 chỉ thừa) — hạng 2/3 vẫn giữ số.
+    // VẪN tạo phần tử này cho hạng 1 (chỉ ẩn bằng visibility:hidden qua class
+    // .podium-rank-hidden, không xoá hẳn khỏi DOM) để giữ nguyên chiều cao thẻ —
+    // xoá hẳn làm thẻ hạng 1 hụt mất khoảng chỗ của huy hiệu, thấp hơn hẳn 2 thẻ
+    // kia, sai dáng "hạng 1 cao nhất" của cả bục.
+    const rankEl = document.createElement('span');
+    rankEl.className = 'podium-rank' + (rank === 1 ? ' podium-rank-hidden' : '');
+    rankEl.textContent = rank;
+    const avatarWrap = document.createElement('div');
+    avatarWrap.className = 'podium-avatar-wrap';
+    if (rank === 1) {
+        // Vương miện chỉ đội cho hạng 1 — ảnh gốc (icon/crown.png) có viền trong suốt
+        // rộng quanh hình vẽ thật nên thu nhỏ bằng CSS (.podium-crown) là đủ, không
+        // cần cắt/sửa lại file ảnh.
+        const crownEl = document.createElement('img');
+        crownEl.className = 'podium-crown';
+        crownEl.src = 'icon/crown.png';
+        crownEl.alt = '';
+        avatarWrap.appendChild(crownEl);
+    }
+    const avatarEl = document.createElement('span');
+    avatarEl.className = 'podium-avatar';
+    const avatarImg = document.createElement('img');
+    avatarImg.className = 'podium-avatar-img';
+    avatarImg.src = playerAvatarPath(row.avatar || pickDefaultPlayerAvatar(row.id));
+    avatarImg.alt = '';
+    avatarEl.appendChild(avatarImg);
+    avatarWrap.appendChild(avatarEl);
+    const nameEl = document.createElement('span');
+    nameEl.className = 'podium-name';
+    nameEl.textContent = row.name || '???';
+    const scoreEl = document.createElement('span');
+    scoreEl.className = 'podium-score';
+    scoreEl.textContent = row.score || 0;
+    card.append(rankEl, avatarWrap, nameEl, scoreEl);
+    return card;
 }
 
 async function refreshLeaderboardList() {
     const statusEl = document.getElementById('leaderboard-status');
+    const podiumEl = document.getElementById('leaderboard-podium');
     const listEl = document.getElementById('leaderboard-list');
+    podiumEl.innerHTML = '';
     listEl.innerHTML = '';
     statusEl.style.display = 'block';
     statusEl.textContent = t('leaderboard_loading');
 
     const { ok, rows, myId } = await fetchLeaderboard();
-    // Modal có thể đã bị đóng trong lúc chờ mạng -> khỏi vẽ nữa cho đỡ giật.
-    if (!document.getElementById('leaderboard-modal').classList.contains('show')) return;
+    // Người chơi có thể đã chuyển sang tab khác trong lúc chờ mạng -> khỏi vẽ nữa cho đỡ giật.
+    if (currentHomeTab !== 'leaderboard') return;
 
     if (!ok) {
         statusEl.textContent = t('leaderboard_unavailable');
@@ -223,20 +406,12 @@ async function refreshLeaderboardList() {
         return;
     }
     statusEl.style.display = 'none';
+
+    rows.slice(0, 3).forEach((row, i) => {
+        podiumEl.appendChild(buildLeaderboardPodiumCard(row, i + 1));
+    });
     rows.forEach((row, i) => {
-        const rowEl = document.createElement('div');
-        rowEl.className = 'leaderboard-row' + (row.id === myId ? ' leaderboard-row-me' : '');
-        const rankEl = document.createElement('span');
-        rankEl.className = 'leaderboard-rank';
-        rankEl.textContent = i + 1;
-        const nameEl = document.createElement('span');
-        nameEl.className = 'leaderboard-name';
-        nameEl.textContent = row.name || '???'; // textContent, không innerHTML -> tránh XSS từ tên người chơi khác
-        const scoreEl = document.createElement('span');
-        scoreEl.className = 'leaderboard-score';
-        scoreEl.textContent = row.score || 0;
-        rowEl.append(rankEl, nameEl, scoreEl);
-        listEl.appendChild(rowEl);
+        listEl.appendChild(buildLeaderboardRow(row, i + 1, myId, true));
     });
 }
 
@@ -1659,6 +1834,15 @@ function renderHomeScreen() {
         playBtn.disabled = false;
     }
     updateCoinDisplay();
+    updateHomeAvatarBtn();
+}
+
+// Nút avatar góc trên-trái màn Home (ngay dưới khung xu) — bấm vào để mở modal
+// Hồ Sơ (xem openProfileModal()), bản thân nút này chỉ là LỐI TẮT + hiện avatar
+// hiện tại, không tự mở gì thêm.
+function updateHomeAvatarBtn() {
+    const file = getPlayerAvatar() || pickDefaultPlayerAvatar(getPlayerId());
+    document.getElementById('home-avatar-btn-img').src = playerAvatarPath(file);
 }
 
 // Có đúng 1 tiến trình dở dang khớp với level SẼ được vào (getNextPlayableLevel())
@@ -2045,6 +2229,11 @@ function showTutorial() {
 function hideTutorial() {
     document.getElementById('tutorial-modal').classList.remove('show');
     try { localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch (e) { /* localStorage có thể bị chặn (ẩn danh...), bỏ qua */ }
+    // Đóng modal Cách Chơi -> trả tab về đúng pane đang thật sự hiện (Trang Chủ
+    // hay Xếp Hạng), tránh tab Cách Chơi bị kẹt trồi cao mãi dù không còn mở gì
+    // nữa. An toàn gọi cả khi đang ở màn Chơi (bấm ❓ trong game) — chỉ đổi class
+    // của các nút tab màn Home, không ảnh hưởng gì tới màn đang hiện thật.
+    if (typeof currentHomeTab !== 'undefined') setActiveHomeTab(currentHomeTab);
 }
 
 function closeTutorialModal() {
@@ -3441,7 +3630,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
 // Mọi nút UI bấm được (nút thường, icon tròn, nút đóng popup, khối chọn level)
 // — dùng chung cho cả 2 cơ chế bên dưới: hiệu ứng lõm khi giữ tay, VÀ độ trễ
 // trước khi hành động thật sự chạy.
-const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-level-display';
+const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-level-display, .home-tab, .home-avatar-btn';
 
 // Hiệu ứng "lõm xuống" khi bấm nút — không chỉ dựa vào :active CSS thuần (không
 // đáng tin cậy trên vài WebView Android, nhất là nút vừa hiện trong popup) mà tự
@@ -3472,6 +3661,11 @@ function attachButtonPressFeedback() {
             // trong lúc chờ (không nảy lên) để tránh cú nảy thừa đó; lúc bấm để TẮT thì
             // vẫn nảy lên bình thường vì đó đúng là hướng chuyển động cuối cùng.
             if (b.id === 'neighbor-highlight-btn' && !b.classList.contains('active')) return;
+            // 3 tab đáy màn Home (.home-tab) bị y hệt lỗi trên: bấm tab CHƯA chọn ->
+            // thả tay nảy về vị trí thường ngay, rồi 150ms sau mới thật sự trồi cao
+            // (.home-tab-active) -> nhìn như "lõm xuống, nảy lên 1 tẹo, rồi mới trồi
+            // lên". Giữ nguyên .btn-pressed tới lúc .home-tab-active thật sự được gắn.
+            if (b.classList.contains('home-tab') && !b.classList.contains('home-tab-active')) return;
             b.classList.remove('btn-pressed');
         });
     };

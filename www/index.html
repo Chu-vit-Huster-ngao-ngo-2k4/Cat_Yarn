@@ -52,7 +52,12 @@
       <div class="screen-top">
         <div class="home-topbar">
           <div class="topbar-side topbar-side-left">
-            <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+            <div class="home-topbar-left-stack">
+              <div class="coin-badge" id="coin-badge">🪙 <span id="coin-count">0</span></div>
+              <button class="home-avatar-btn" id="home-avatar-btn" onclick="openProfileModal()" title="Hồ sơ">
+                <img class="home-avatar-btn-img" id="home-avatar-btn-img" src="icon/ava/avaPig.png" alt="">
+              </button>
+            </div>
           </div>
           <div class="topbar-side topbar-side-right topbar-icons">
             <button class="icon-btn" onclick="showHomeSettings()" title="Cài đặt" data-i18n-title="home_settings_title"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
@@ -60,7 +65,7 @@
         </div>
       </div>
 
-      <div class="screen-middle">
+      <div class="screen-middle" id="home-pane-home">
         <div class="home-level-display" onclick="playCurrentLevel()" title="Bấm để chơi">
           <div class="home-level-label" data-i18n="home_level_label">Level</div>
           <div class="home-level-number" id="home-level-number">1</div>
@@ -68,9 +73,69 @@
         <button class="btn-piffle btn-green home-play-btn" onclick="playCurrentLevel()" data-i18n="home_play_btn">▶ Chơi</button>
       </div>
 
-      <div class="screen-bottom">
-        <button class="btn-piffle btn-blue" onclick="showTutorial()" data-i18n="home_howto_btn">📖 Cách Chơi</button>
-        <button class="btn-piffle btn-yellow" onclick="openLeaderboardModal()" data-i18n="home_leaderboard_btn">🏆 Xếp Hạng</button>
+      <div class="screen-middle home-leaderboard-pane" id="home-pane-leaderboard" style="display:none;">
+        <div class="leaderboard-status" id="leaderboard-status" data-i18n="leaderboard_loading">Đang tải...</div>
+        <div class="leaderboard-podium" id="leaderboard-podium"></div>
+        <div class="leaderboard-list" id="leaderboard-list"></div>
+      </div>
+
+      <!-- Tab Cách Chơi trên màn Home — NỘI DUNG Y HỆT #tutorial-modal (popup),
+           chỉ khác cách hiện: đây là 1 pane tĩnh xem lại bất cứ lúc nào, không có
+           nút "Bắt đầu tập chơi" (đó là hành động CHỈ dành cho luồng lần-đầu-vào-
+           game/dắt tay, xem maybeShowTutorialOnFirstVisit()/closeTutorialModal()
+           trong script.js — luồng đó vẫn dùng popup #tutorial-modal như cũ, KHÔNG
+           đổi, vì nó gắn liền với việc bắt đầu tutorial dắt tay từng bước). -->
+      <div class="screen-middle home-howto-pane" id="home-pane-howto" style="display:none;">
+        <div class="tutorial-tips">
+          <div class="tip-row">
+            <span class="tip-icon">🐾</span>
+            <span class="tip-text" data-i18n="tutorial_tip_move">Chạm ô kề bên (hoặc bấm phím mũi tên) để mèo bước tới.</span>
+          </div>
+          <div class="tip-row tip-row-visual">
+            <svg class="tip-diagram" viewBox="0 0 174 174" width="140" height="140" aria-hidden="true">
+              <rect x="0" y="0" width="54" height="54" rx="10" fill="#ffca3a" stroke="#4a3022" stroke-width="3"/>
+              <text x="27" y="35" text-anchor="middle" font-size="26">💣</text>
+              <rect x="60" y="0" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="120" y="0" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="0" y="60" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="60" y="60" width="54" height="54" rx="10" fill="#ffffff" stroke="#4a3022" stroke-width="4"/>
+              <text x="87" y="97" text-anchor="middle" font-size="30" font-weight="700" fill="#388e3c" font-family="'Fredoka', cursive, sans-serif">2</text>
+              <rect x="120" y="60" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="0" y="120" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="60" y="120" width="54" height="54" rx="10" fill="#fffdf5" stroke="#4a3022" stroke-width="3"/>
+              <rect x="120" y="120" width="54" height="54" rx="10" fill="#ffca3a" stroke="#4a3022" stroke-width="3"/>
+              <text x="147" y="155" text-anchor="middle" font-size="26">💣</text>
+            </svg>
+            <span class="tip-text" data-i18n="tutorial_tip_number">Số trên ô = số bẫy đang ẩn ở 8 ô xung quanh nó — dùng số để đoán ô nào an toàn.</span>
+          </div>
+          <div class="tip-row">
+            <span class="tip-icon">💣</span>
+            <span class="tip-text" data-i18n="tutorial_tip_trap">Bước trúng ô có bẫy là thua ngay, phải bấm Replay chơi lại từ đầu.</span>
+          </div>
+          <div class="tip-row">
+            <span class="tip-icon">🚩</span>
+            <span class="tip-text" data-i18n="tutorial_tip_flag">Giữ ngón tay (hoặc chuột phải) trên 1 ô nghi có bẫy để cắm cờ, tránh bấm nhầm.</span>
+          </div>
+          <div class="tip-row">
+            <span class="tip-icon">🐟</span>
+            <span class="tip-text" data-i18n="tutorial_tip_fish">Dẫn mèo tới đĩa cá để qua màn!</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen-bottom home-tabbar">
+        <button class="home-tab" id="home-tab-leaderboard" onclick="switchHomeTab('leaderboard')">
+          <span class="home-tab-icon">🏆</span>
+          <span class="home-tab-label" data-i18n="tab_leaderboard">Xếp Hạng</span>
+        </button>
+        <button class="home-tab home-tab-active" id="home-tab-home" onclick="switchHomeTab('home')">
+          <span class="home-tab-icon">🏠</span>
+          <span class="home-tab-label" data-i18n="tab_home">Trang Chủ</span>
+        </button>
+        <button class="home-tab" id="home-tab-howto" onclick="switchHomeTab('howto')">
+          <span class="home-tab-icon">📖</span>
+          <span class="home-tab-label" data-i18n="tab_howto">Cách Chơi</span>
+        </button>
       </div>
     </div>
 
@@ -185,6 +250,36 @@
     </div>
   </div>
 
+  <!-- HỒ SƠ NGƯỜI CHƠI — avatar + biệt danh CHUNG cho cả game (mở từ nút avatar góc
+       trên-trái màn Home), KHÔNG phải thứ riêng của tab Xếp Hạng — tab Xếp Hạng chỉ
+       ĐỌC LẠI đúng tên/avatar đã lưu ở đây để hiện lên bảng, không tự có form riêng. -->
+  <div id="profile-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable">
+      <button class="modal-close-btn" onclick="closeProfileModal()" title="Đóng" data-i18n-title="settings_close_title">×</button>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="profile_title">Hồ Sơ</h2>
+
+      <div class="profile-summary-card">
+        <span class="profile-modal-avatar-frame">
+          <img class="profile-modal-avatar-preview" id="profile-modal-avatar-preview" alt="">
+        </span>
+        <div class="profile-name-field">
+          <input type="text" id="profile-name-input" maxlength="16" data-i18n-placeholder="leaderboard_name_placeholder" placeholder="Đặt biệt danh của bạn">
+          <span class="profile-name-edit-icon">✏️</span>
+        </div>
+      </div>
+
+      <div class="profile-tabs">
+        <button class="profile-tab profile-tab-active" type="button" data-i18n="profile_tab_avatar">Avatar</button>
+        <button class="profile-tab" type="button" disabled data-i18n="profile_tab_frame">Khung — sắp có</button>
+      </div>
+      <div class="avatar-picker-grid" id="avatar-picker-grid"></div>
+
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="savePlayerProfile()" data-i18n="profile_save_btn">💾 Lưu</button>
+      </div>
+    </div>
+  </div>
+
   <div id="booster-shop-modal" class="modal-overlay">
     <div class="modal-card modal-card-closable">
       <button class="modal-close-btn" onclick="hideBoosterShop()" title="Đóng" data-i18n-title="settings_close_title">×</button>
@@ -195,21 +290,6 @@
         <button class="btn-piffle btn-blue" onclick="buyBoosterWithCoins(this)" data-i18n="booster_shop_buy_coins_btn">🪙 Mua (100)</button>
         <button class="btn-piffle btn-green" onclick="buyBoosterWithAd(this)" data-i18n="booster_shop_buy_ad_btn">📺 Xem QC</button>
       </div>
-    </div>
-  </div>
-
-  <div id="leaderboard-modal" class="modal-overlay">
-    <div class="modal-card modal-card-closable">
-      <button class="modal-close-btn" onclick="closeLeaderboardModal()" title="Đóng" data-i18n-title="settings_close_title">×</button>
-      <div class="modal-icon">🏆</div>
-      <h2 class="modal-title" style="color:#4a3022;" data-i18n="leaderboard_title">Bảng Xếp Hạng</h2>
-      <p class="modal-message" data-i18n="leaderboard_subtitle">Xếp theo số màn đã qua</p>
-      <div class="leaderboard-name-form" id="leaderboard-name-form">
-        <input type="text" id="leaderboard-name-input" maxlength="16" data-i18n-placeholder="leaderboard_name_placeholder" placeholder="Đặt biệt danh của bạn">
-        <button class="btn-piffle btn-green" onclick="submitLeaderboardName()" data-i18n="leaderboard_join_btn">Tham Gia</button>
-      </div>
-      <div class="leaderboard-status" id="leaderboard-status" data-i18n="leaderboard_loading">Đang tải...</div>
-      <div class="leaderboard-list" id="leaderboard-list"></div>
     </div>
   </div>
 
@@ -345,6 +425,10 @@
   <div id="level-hint-hand">👉</div>
 
   <script src="ads.js"></script>
+  <!-- Danh sách avatar (PLAYER_AVATAR_FILES) — TỰ SINH bằng
+       `python tools/build_avatar_list.py` (quét icon/ava/), phải nạp TRƯỚC
+       leaderboard.js vì leaderboard.js dùng biến này ngay lúc định nghĩa hàm. -->
+  <script src="avatars.js"></script>
   <script src="leaderboard.js"></script>
   <script src="script.js"></script>
 </body>
