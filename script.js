@@ -2645,6 +2645,21 @@ function render(instant) {
                 el.appendChild(colorBadge);
             }
 
+            // Đúng ô cổng đầu vừa dẫm trúng -> gắn thêm icon xoáy ốc nhỏ góc trên-phải,
+            // để phân biệt RÕ với các ô lân cận chỉ tô tím vì "gần đây có cổng" (2 loại
+            // này trước đó cùng tô 1 màu tím giống hệt nhau, không biết ô nào MỚI THẬT
+            // SỰ là cổng). Không đè lên số ở giữa hay đốm màu góc trên-trái.
+            if (cell.type === 'G' && cell.revealed) {
+                const gateIcon = document.createElement('span');
+                gateIcon.className = 'gate-origin-badge';
+                gateIcon.innerHTML = `
+                    <svg viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="8" fill="#8e24aa" stroke="#4a148c" stroke-width="1.5"/>
+                        <path d="M10 4 A6 6 0 1 1 4 10" stroke="#f3e5f5" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    </svg>`;
+                el.appendChild(gateIcon);
+            }
+
             const revealIdx = revealOrder.get(r + ',' + c);
             if (revealIdx !== undefined) {
                 // Bung .cell (lớp NGOÀI), không phải .cell-inner — vì nền/viền/màu của ô
