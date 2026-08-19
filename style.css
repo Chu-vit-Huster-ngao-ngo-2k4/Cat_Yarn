@@ -965,40 +965,39 @@
     }
 
     /* Ô 'N' có cổng đầu kề cạnh (không biết chính xác bao nhiêu — chỉ báo "gần
-       đây có cổng"), HOẶC chính ô cổng đầu vừa dẫm trúng — tô tím MỜ, số bẫy
-       (nếu có) vẫn hiện bình thường ở giữa (xem .num-badge), không có số cổng
-       riêng nào cả — cố ý ĐƠN GIẢN HÓA, không suy luận chính xác được vị trí
-       cổng đầu bằng logic (khác bẫy, vì không gây thua nên không bắt buộc). */
+       đây có cổng") — tô tím MỜ, số bẫy (nếu có) vẫn hiện bình thường ở giữa
+       (xem .num-badge), không có số cổng riêng nào cả — cố ý ĐƠN GIẢN HÓA,
+       không suy luận chính xác được vị trí cổng đầu bằng logic (khác bẫy, vì
+       không gây thua nên không bắt buộc). */
     .cell.gate-nearby {
       background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
       box-shadow: 0 5px 0 #ba68c8 !important;
     }
 
-    /* Cổng đích — lộ diện sẵn từ đầu màn, tông tím ĐẬM hơn để phân biệt "nơi
-       ĐẾN" (luôn biết trước) với các ô chỉ MỜ MỜ "gần đây có cổng" ở trên. */
+    /* ĐÚNG ô cổng đầu vừa dẫm trúng — tô ĐEN hẳn (khác tông tím mờ của
+       .gate-nearby ở trên, cái đó chỉ là ô LÂN CẬN "gần đây có cổng" chứ bản
+       thân không phải cổng) để phân biệt rõ đâu mới là ô cổng THẬT. */
+    .cell.gate-origin-cell {
+      background: linear-gradient(135deg, #3d2c40 0%, #1a1220 100%) !important;
+      box-shadow: 0 5px 0 #0d0810 !important;
+    }
+
+    /* Số trên ô cổng đầu (.gate-origin-cell) — viền trắng để đọc rõ trên nền đen,
+       màu chữ (num-1..num-8) giữ nguyên như bình thường. text-shadow làm dự
+       phòng cho trình duyệt không hỗ trợ -webkit-text-stroke. */
+    .num-badge.num-badge-outlined {
+      -webkit-text-stroke: 2px #ffffff;
+      paint-order: stroke fill;
+      text-shadow:
+        -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff,
+        -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff;
+    }
+
+    /* Cổng đích — lộ diện sẵn từ đầu màn, tông tím ĐẬM để phân biệt "nơi ĐẾN"
+       (luôn biết trước) với ô cổng đầu (đen) và vùng tô tím mờ xung quanh. */
     .cell.gate-dest-cell {
       background: linear-gradient(135deg, #e1bee7 0%, #ce93d8 100%) !important;
       box-shadow: 0 5px 0 #8e24aa !important;
-    }
-
-    /* Icon xoáy ốc nhỏ góc trên-phải — CHỈ gắn lên ĐÚNG ô cổng đầu vừa dẫm trúng
-       (khác các ô .gate-nearby lân cận, chỉ tô tím vì "gần đó có cổng" chứ bản
-       thân không phải cổng) — để người chơi phân biệt được đâu mới là ô cổng
-       THẬT, không lẫn với vùng tô tím xung quanh. */
-    .gate-origin-badge {
-      position: absolute;
-      top: 4px;
-      right: 5px;
-      width: 18px;
-      height: 18px;
-      pointer-events: none;
-      z-index: 2;
-    }
-
-    .gate-origin-badge svg {
-      width: 100%;
-      height: 100%;
-      display: block;
     }
 
     /* Chấm tròn ĐÚNG màu ô cá — báo ô này giấu đốm màu, người chơi liên tưởng
