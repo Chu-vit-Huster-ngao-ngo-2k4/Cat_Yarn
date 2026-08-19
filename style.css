@@ -1405,6 +1405,21 @@
       pointer-events: none;
     }
 
+    /* Cơ chế "Liên Kết" (thử nghiệm) — TÔ NGUYÊN NỀN Ô bằng màu nhóm (--link-color
+       set bằng JS) khi ô CÒN ẨN — người chơi biết trước "2 ô này cùng phe" nhưng
+       chưa biết cùng phe nào (an toàn hay bẫy), phải tự suy qua các ô số khác. Mở
+       ra rồi (JS không còn gắn class 'link-cell' nữa, xem render()) thì trở lại
+       màu bình thường như mọi ô khác, không giữ tint. Đè trực tiếp lên `background`
+       (không dùng ::after border như trước) vì 2 lý do: (1) dễ nhận diện hơn hẳn
+       theo đúng yêu cầu "nhận diện bằng màu", (2) ::after đã bị "Soi Quanh"
+       (.neighbor-highlight::after) tranh mất — 1 ô chỉ có đúng 1 ::after nên 2 hiệu
+       ứng đè lên nhau, hiệu ứng nào thắng thì cái kia mất hẳn. Đổi sang `background`
+       tránh xung đột này hoàn toàn (khác thuộc tính). */
+    .cell.link-cell.hidden-tile,
+    .cell.link-cell.flagged {
+      background: var(--link-color, #ccc) !important;
+    }
+
     /* Controls */
     .controls {
       margin-top: 20px;
@@ -1732,6 +1747,21 @@
       justify-content: center;
       gap: 6px;
       margin: 12px 0 20px;
+      flex-wrap: wrap;
+    }
+
+    /* Dropdown chọn cơ chế trước khi "Gen Lại Level" (CHỈ DEV, xem dev-regen-row
+       trong Color_Flow_2.0_fixed.html) — ép cơ chế cụ thể (cổng/màu/liên kết) thay
+       vì để random hoàn toàn, tiện test riêng từng cơ chế. */
+    .dev-regen-select {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 2px solid var(--cacao);
+      background: #fff;
+      color: var(--cacao);
     }
 
     /* Hàng "Nhạc nền — sắp có" trong Settings màn Home: nhạt màu, chưa bấm được,
@@ -2016,9 +2046,11 @@
        vài avatar vẫn nằm gọn bên trái, không tạo khoảng trống lệch lạc như grid
        chia đều cột lúc chưa đủ lấp hàng. Avatar đang chọn viền xanh lá
        (--btn-green) + dấu tick, giống dáng "đang chọn" quen thuộc ở game khác. */
+    /* Grid CỐ ĐỊNH 4 cột (thay vì flex-wrap tự xuống dòng theo bề rộng modal) —
+       luôn đúng 4 avatar/hàng dù modal rộng/hẹp thế nào. */
     .avatar-picker-grid {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
       width: 100%;
       margin-bottom: 16px;
@@ -2026,7 +2058,7 @@
 
     .avatar-pick {
       position: relative;
-      width: 64px;
+      width: 100%;
       background: none;
       border: none;
       padding: 0;
@@ -2036,8 +2068,8 @@
 
     .avatar-pick-frame {
       display: block;
-      width: 64px;
-      height: 64px;
+      width: 100%;
+      aspect-ratio: 1 / 1;
       border-radius: 10px;
       border: 3px solid var(--cacao);
       background: #ffffff;

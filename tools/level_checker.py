@@ -25,6 +25,19 @@ cong" (khong lo so luong chinh xac), nen solver o day CHI kiem tra kha nang giai
 duoc theo lop BAY nhu cu; count2 (so cong dau ke 8 huong) van duoc tinh trong
 build_grid() de doi chieu neu can nhung khong dua vao deduce()/simulate().
 
+'a'-'d' = bay LIEN KET nhom a/b/c/d (van la bay binh thuong ve moi mat - tinh vao
+count, gay thua khi dam trung - chi THEM co nhom), 'w'-'z' = cong dau LIEN KET
+CUNG nhom voi chu cai a-d tuong ung (w<->a, x<->b, y<->c, z<->d) nhung ban than
+la CONG chu khong phai bay, '1'-'4' = o thuong LIEN KET nhom 1/2/3/4 (van la o
+thuong binh thuong, chi them co nhom).
+
+Co che Lien Ket la "CUNG KICH HOAT" (KHONG con "cung loai" nua - da bo Luat D):
+1 nhom co the tron bay + cong dau, dam trung 1 o thi CAC O CON LAI trong nhom
+cung "kich hoat" theo NGAY (bay tu thao ngoi, cong dau tu hut sang cong dich
+that su) - xem revealLinkedPartners() trong script.js. VI VAY solver o day
+KHONG suy luan duoc gi tu co nhom nua (chi con y nghia luc choi that, khong con
+la cong cu ho tro logic) - nhom van phai co >= 2 o (khong thi vo nghia).
+
 Cach dung:
   python tools/level_checker.py levels/level01.json      # kiem 1 file JSON co san
   python tools/level_checker.py --all                    # kiem toan bo levels/*.json
@@ -36,7 +49,7 @@ import os
 import json
 import argparse
 
-ALLOWED_CHARS = set('SE#.CDGP')
+ALLOWED_CHARS = set('SE#.CDGPabcd1234wxyz')
 DIRS_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 DIRS_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
@@ -82,16 +95,31 @@ def parse_rows(rows):
     if p_positions and not g_positions:
         raise LevelError("Co o 'P' (cong dich) nhung khong co o 'G' (cong dau) nao ca - vo nghia.")
 
+    # Nhom lien ket: 'a'-'d' (bay) va 'w'-'z' (cong dau, w<->a x<->b y<->c z<->d)
+    # CUNG 1 nhom - phai gop lai roi moi dem tong so o.
+    gate_link_pair = {'w': 'a', 'x': 'b', 'y': 'c', 'z': 'd'}
+    for canon in 'abcd':
+        gate_char = [k for k, v in gate_link_pair.items() if v == canon][0]
+        positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] in (canon, gate_char)]
+        if positions and len(positions) < 2:
+            raise LevelError(f"Nhom lien ket '{canon}' chi co 1 o ({positions[0]}) - phai >= 2 o moi co nghia.")
+    for group_char in '1234':
+        positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == group_char]
+        if positions and len(positions) < 2:
+            raise LevelError(f"Nhom lien ket '{group_char}' chi co 1 o ({positions[0]}) - phai >= 2 o moi co nghia.")
+
     return rows_count, width, s_positions[0], e_positions[0], g_positions, (p_positions[0] if p_positions else None)
 
 
 def build_grid(rows, rows_count, width):
     """type: 'S' | 'E' | 'B' (bay) | 'G' (cong dau) | 'P' (cong dich) | 'N' (thuong);
-    count = so bay ke 8 huong, count2 = so cong dau ke 8 huong (lop doc lap)."""
+    count = so bay ke 8 huong, count2 = so cong dau ke 8 huong (lop doc lap).
+    link_group: None hoac ky tu nhom ('a'-'d' bay lien ket, '1'-'4' o thuong lien ket)."""
     grid = [[None] * width for _ in range(rows_count)]
     for r in range(rows_count):
         for c in range(width):
             ch = rows[r][c]
+            link_group = None
             if ch == 'S':
                 t = 'S'
             elif ch == 'E':
@@ -102,9 +130,18 @@ def build_grid(rows, rows_count, width):
                 t = 'G'
             elif ch == 'P':
                 t = 'P'
+            elif ch in 'abcd':
+                t = 'B'
+                link_group = ch
+            elif ch in 'wxyz':
+                t = 'G'
+                link_group = {'w': 'a', 'x': 'b', 'y': 'c', 'z': 'd'}[ch]
+            elif ch in '1234':
+                t = 'N'
+                link_group = ch
             else:
                 t = 'N'
-            grid[r][c] = {'type': t, 'count': 0, 'count2': 0}
+            grid[r][c] = {'type': t, 'count': 0, 'count2': 0, 'link_group': link_group}
 
     for r in range(rows_count):
         for c in range(width):
@@ -209,6 +246,10 @@ def deduce_layer(grid, rows_count, width, revealed, count_field):
                         if k not in deduced_mine:
                             deduced_mine.add(k)
                             changed = True
+
+        # Luat D (suy luan theo nhom lien ket) DA BO - co che Lien Ket gio la "cung
+        # kich hoat" chu khong con "cung loai" nua (xem ghi chu dau file), nen
+        # khong the suy luan cheo giua cac o cung nhom duoc nua.
     return deduced_safe, deduced_mine
 
 
@@ -312,6 +353,9 @@ def check_rows(rows, name):
 
     ok = True
     extra = f"  |  Cong dau={len(g_positions)}  Cong dich={cell_label(p_pos)}" if g_positions else ""
+    link_chars_used = sorted(set(ch for row in rows for ch in row if ch in 'abcd1234wxyz'))
+    if link_chars_used:
+        extra += f"  |  Nhom lien ket: {', '.join(link_chars_used)}"
     print(f"  Kich thuoc: {rows_count}x{width}  |  Start={cell_label(s_pos)}  Dia ca={cell_label(e_pos)}{extra}")
 
     if result['first_move_bad']:

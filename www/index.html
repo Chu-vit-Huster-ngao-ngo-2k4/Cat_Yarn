@@ -214,6 +214,13 @@
            DEV_LEVEL_TOOLS/showSettings() trong script.js), ẩn hẳn với level tĩnh
            và tắt hẳn nếu DEV_LEVEL_TOOLS = false lúc build bản thật. -->
       <div class="settings-row" id="dev-regen-row" style="display:none;">
+        <select id="dev-regen-mechanic-select" class="dev-regen-select">
+          <option value="">🎲 Ngẫu nhiên (mặc định)</option>
+          <option value="none">💣 Chỉ bẫy thường</option>
+          <option value="gate">🌀 Cổng dịch chuyển</option>
+          <option value="color">🎨 Tìm màu</option>
+          <option value="link">🔗 Liên kết</option>
+        </select>
         <button class="btn-piffle btn-yellow" onclick="devRegenerateCurrentLevel()">🎲 [Dev] Gen Lại Level</button>
       </div>
     </div>
