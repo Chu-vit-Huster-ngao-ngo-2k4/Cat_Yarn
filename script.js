@@ -1239,17 +1239,13 @@ function deduceLayer(countField) {
     return { deducedSafe, deducedMine };
 }
 
-// Gộp 2 lớp suy luận ĐỘC LẬP (bẫy + cổng đầu, xem deduceLayer()): 1 ô chỉ thật
-// sự "an toàn để bước vào" (deducedSafe) nếu suy được an toàn ở CẢ 2 lớp — an
-// toàn bẫy nhưng chưa chắc an toàn cổng đầu thì vẫn có thể bị hút cổng, không
-// tính là an toàn hoàn toàn. deducedMine/deducedGate giữ riêng cho nơi khác cần
-// (vd cheat menu) — deducedSafe vẫn là trường chính, giữ tương thích ngược.
+// CHỈ suy luận theo lớp bẫy — cổng đầu (count2) KHÔNG bắt buộc phải suy luận
+// được chính xác (khác bẫy, dẫm trúng không gây thua), số cổng lân cận cũng
+// không hiện ra thành số riêng nữa (xem render() — chỉ tô tím mờ báo "gần đây
+// có cổng", không lộ chính xác bao nhiêu). deduceLayer('count2') vẫn còn dùng
+// được nếu sau này cần, nhưng Gợi Ý/độ khó chỉ quan tâm tới bẫy.
 function deduceAll() {
-    const bombLayer = deduceLayer('count');
-    const gateLayer = deduceLayer('count2');
-    const deducedSafe = new Set();
-    for (const k of bombLayer.deducedSafe) if (gateLayer.deducedSafe.has(k)) deducedSafe.add(k);
-    return { deducedSafe, deducedMine: bombLayer.deducedMine, deducedGate: gateLayer.deducedMine };
+    return deduceLayer('count');
 }
 
 function findHintCell() {
@@ -2606,19 +2602,9 @@ function render(instant) {
                 else el.classList.add('fish-cell-plain'); // level thường (không cần tìm màu) -> vẫn cho ô cá nổi bật nhẹ, không để trắng trơn như ô số
                 setColorGlowDelay(el);
                 contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
-            } else if (cell.type === 'G') {
-                // Cổng đầu vừa dẫm trúng (đã "kích hoạt") — hiện icon xoáy ốc màu tím,
-                // KHÔNG dùng tông đỏ/đen như bẫy vì đây không phải hình phạt gây thua.
-                el.classList.add('gate-cell');
-                contentHTML = `
-                    <svg viewBox="0 0 40 40" style="width:32px; height:32px;">
-                        <circle cx="20" cy="20" r="15" fill="#ce93d8" stroke="#6a1b9a" stroke-width="3"/>
-                        <path d="M20 8 A12 12 0 1 1 8 20" stroke="#f3e5f5" stroke-width="3" fill="none" stroke-linecap="round"/>
-                        <circle cx="20" cy="20" r="4" fill="#4a148c"/>
-                    </svg>`;
             } else if (cell.type === 'P') {
-                // Cổng đích — lộ diện sẵn từ đầu màn như S/E, tông tím đậm hơn cổng đầu
-                // để phân biệt "đây là nơi ĐẾN", không phải cái cần né.
+                // Cổng đích — lộ diện sẵn từ đầu màn như S/E, icon riêng vì đây LUÔN
+                // biết trước vị trí (không phải ô cần suy luận như cổng đầu).
                 el.classList.add('gate-dest-cell');
                 contentHTML = `
                     <svg viewBox="0 0 40 40" style="width:32px; height:32px;">
@@ -2627,11 +2613,20 @@ function render(instant) {
                         <circle cx="20" cy="20" r="4" fill="#f3e5f5"/>
                     </svg>`;
             } else {
+                // Ô 'G' (cổng đầu) vừa dẫm trúng thì render GIỐNG HỆT ô thường ('N')
+                // bên dưới — vẫn hiện số bẫy bình thường, chỉ khác nền tô tím (xem
+                // class 'gate-nearby' ngay dưới) để nhớ "đây từng là 1 cổng".
                 el.classList.add('revealed-safe');
-                if (cell.type === 'N' && cell.count > 0) {
+                if ((cell.type === 'N' || cell.type === 'G') && cell.count > 0) {
                     // Số hiển thị bình thường, to/giữa ô — kể cả khi mèo đang đứng lên ô
                     // đó thì cứ để mèo che, đơn giản và dễ nhìn hơn là thu nhỏ vào góc.
                     contentHTML = `<span class="num-badge num-${cell.count}">${cell.count}</span>`;
+                }
+                // Ô 'N' có ít nhất 1 cổng đầu kề cạnh (count2>0), HOẶC chính ô 'G' vừa
+                // dẫm trúng -> tô nền tím mờ báo "gần đây có cổng", KHÔNG lộ chính xác
+                // bao nhiêu (theo đúng yêu cầu: đỡ rối, không thêm số thứ 2 trên ô).
+                if (cell.type === 'G' || (cell.type === 'N' && cell.count2 > 0)) {
+                    el.classList.add('gate-nearby');
                 }
             }
 
@@ -2648,15 +2643,6 @@ function render(instant) {
                 const colorBadge = document.createElement('span');
                 colorBadge.className = cell.hasColor2 ? 'color-badge color-badge-2' : 'color-badge';
                 el.appendChild(colorBadge);
-            }
-
-            // Số cổng đầu lân cận (lớp đếm ĐỘC LẬP với số bẫy giữa ô) — huy hiệu nhỏ
-            // góc trên-phải, không đè lên số bẫy ở giữa hay đốm màu ở góc trên-trái.
-            if (cell.revealed && cell.type === 'N' && cell.count2 > 0) {
-                const gateBadge = document.createElement('span');
-                gateBadge.className = 'gate-count-badge';
-                gateBadge.textContent = cell.count2;
-                el.appendChild(gateBadge);
             }
 
             const revealIdx = revealOrder.get(r + ',' + c);

@@ -19,10 +19,11 @@ dat ngau nhien tren bat ky o khong phai bay nao.
 
 G = cong dau (co che "cong dich chuyen" - an, KHONG gay thua, dam trung se bi
 "hut" sang cong dich), P = cong dich (dung 1 o, lo dien san tu dau man nhu S/E).
-Neu man co G thi PHAI co dung 1 P (va nguoc lai). Cong dau co SO RIENG (dem
-canh 8 huong, độc lap voi so bay) - solver chay 2 lop suy luan doc lap (bay +
-cong dau) roi giao (intersect) lai, 1 o chi thuc su "an toan" (khong can doan)
-neu an toan o CA HAI lop - dung y het deduceAll() trong script.js.
+Neu man co G thi PHAI co dung 1 P (va nguoc lai). Cong dau KHONG can suy luan
+duoc chinh xac bang logic (khac bay) - script.js chi to tim mo bao "gan day co
+cong" (khong lo so luong chinh xac), nen solver o day CHI kiem tra kha nang giai
+duoc theo lop BAY nhu cu; count2 (so cong dau ke 8 huong) van duoc tinh trong
+build_grid() de doi chieu neu can nhung khong dua vao deduce()/simulate().
 
 Cach dung:
   python tools/level_checker.py levels/level01.json      # kiem 1 file JSON co san
@@ -212,18 +213,15 @@ def deduce_layer(grid, rows_count, width, revealed, count_field):
 
 
 def deduce(grid, rows_count, width, revealed):
-    """Gop 2 lop suy luan DOC LAP (bay + cong dau): 1 o chi thuc su 'an toan de buoc
-    vao' neu suy duoc an toan o CA HAI lop - dung y het deduceAll() trong script.js."""
-    bomb_safe, bomb_mine = deduce_layer(grid, rows_count, width, revealed, 'count')
-    gate_safe, gate_mine = deduce_layer(grid, rows_count, width, revealed, 'count2')
-    deduced_safe = bomb_safe & gate_safe
-    return deduced_safe, bomb_mine, gate_mine
+    """CHI suy luan theo lop BAY - dung y het deduceAll() trong script.js (cong dau
+    khong can suy luan duoc chinh xac, xem ghi chu dau file)."""
+    return deduce_layer(grid, rows_count, width, revealed, 'count')
 
 
 def simulate(grid, rows_count, width, s_pos, e_pos):
     """
     Tra ve dict:
-      first_move_bad: list cac o bay/cong dau nam sat Start (vi pham luat "khong doan nuoc dau")
+      first_move_bad: list cac o bay nam sat Start (vi pham luat "khong doan nuoc dau")
       reached_e: co toi duoc dia ca thuan tuy bang suy luan khong
       fully_solved: toan bo o thuong co duoc mo het khong (khong con o nao phai doan)
       stuck_cells: cac o thuong (khong phai bay/cong dau) con bi ket lai, can doan mo
@@ -239,11 +237,14 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     first_move_bad = []
     for dr, dc in DIRS_4:
         nr, nc = s_pos[0] + dr, s_pos[1] + dc
-        if 0 <= nr < rows_count and 0 <= nc < width and grid[nr][nc]['type'] in ('B', 'G'):
+        if 0 <= nr < rows_count and 0 <= nc < width and grid[nr][nc]['type'] == 'B':
             first_move_bad.append((nr, nc))
 
     # Nuoc di dau tien luon duoc dam bao an toan theo thiet ke -> tu mo cac o ke Start
-    # (chi tinh cac o khong phai bay/cong dau; neu co thi da bao loi o tren roi).
+    # (chi tinh cac o khong phai bay; neu co bay canh Start thi da bao loi o tren roi.
+    # Cong dau (G) van KHONG tu mo o day - giong game that, khong bao gio tu lo ra
+    # ma phai dam trung/khong con hidden - nhung co mat canh Start khong tinh la loi
+    # vi khong gay thua, khac bay).
     for dr, dc in DIRS_4:
         nr, nc = s_pos[0] + dr, s_pos[1] + dc
         if 0 <= nr < rows_count and 0 <= nc < width and not revealed[nr][nc] and grid[nr][nc]['type'] not in ('B', 'G'):
@@ -264,7 +265,7 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     reached_e = e_reachable()
 
     while True:
-        deduced_safe, _, _ = deduce(grid, rows_count, width, revealed)
+        deduced_safe, _ = deduce(grid, rows_count, width, revealed)
         newly_revealed = False
         for (r, c) in deduced_safe:
             if not revealed[r][c]:
@@ -316,7 +317,7 @@ def check_rows(rows, name):
     if result['first_move_bad']:
         ok = False
         bad = ', '.join(cell_label(x) for x in result['first_move_bad'])
-        print(f"  [FAIL] O canh Start co bay/cong dau ({bad}) -> nuoc di dau tien phai doan mo, vi pham luat thiet ke.")
+        print(f"  [FAIL] O canh Start co bay ({bad}) -> nuoc di dau tien phai doan mo, vi pham luat thiet ke.")
     else:
         print("  [OK] Cac o canh Start deu an toan (nuoc di dau khong phai doan).")
 

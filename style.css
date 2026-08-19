@@ -964,39 +964,21 @@
       box-shadow: 0 5px 0 #8ac926 !important;
     }
 
-    /* Cổng đầu vừa dẫm trúng (KHÔNG phải hình phạt gây thua như bẫy) — tông tím
-       sáng, dịu mắt, phân biệt rõ với .bomb-cell màu đen/nâu tối. */
-    .cell.gate-cell {
+    /* Ô 'N' có cổng đầu kề cạnh (không biết chính xác bao nhiêu — chỉ báo "gần
+       đây có cổng"), HOẶC chính ô cổng đầu vừa dẫm trúng — tô tím MỜ, số bẫy
+       (nếu có) vẫn hiện bình thường ở giữa (xem .num-badge), không có số cổng
+       riêng nào cả — cố ý ĐƠN GIẢN HÓA, không suy luận chính xác được vị trí
+       cổng đầu bằng logic (khác bẫy, vì không gây thua nên không bắt buộc). */
+    .cell.gate-nearby {
       background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
       box-shadow: 0 5px 0 #ba68c8 !important;
     }
 
-    /* Cổng đích — lộ diện sẵn từ đầu màn, tông tím ĐẬM hơn cổng đầu để phân biệt
-       "nơi ĐẾN" với "nơi cần né". */
+    /* Cổng đích — lộ diện sẵn từ đầu màn, tông tím ĐẬM hơn để phân biệt "nơi
+       ĐẾN" (luôn biết trước) với các ô chỉ MỜ MỜ "gần đây có cổng" ở trên. */
     .cell.gate-dest-cell {
       background: linear-gradient(135deg, #e1bee7 0%, #ce93d8 100%) !important;
       box-shadow: 0 5px 0 #8e24aa !important;
-    }
-
-    /* Số cổng đầu lân cận — huy hiệu nhỏ góc trên-phải, tông tím để không lẫn với
-       số bẫy (giữa ô, tô màu Minesweeper cổ điển) hay đốm màu (góc trên-trái). */
-    .gate-count-badge {
-      position: absolute;
-      top: 4px;
-      right: 6px;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 3px;
-      border-radius: 8px;
-      background: #8e24aa;
-      color: #fff;
-      font-family: 'Fredoka', cursive, sans-serif;
-      font-weight: 700;
-      font-size: 0.75rem;
-      line-height: 16px;
-      text-align: center;
-      pointer-events: none;
-      z-index: 2;
     }
 
     /* Chấm tròn ĐÚNG màu ô cá — báo ô này giấu đốm màu, người chơi liên tưởng
