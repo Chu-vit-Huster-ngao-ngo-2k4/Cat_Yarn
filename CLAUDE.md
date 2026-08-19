@@ -123,6 +123,29 @@ lìm nếu không biết thao tác bí mật.
 6. Cân nhắc lại default ngôn ngữ (đang là tiếng Anh) nếu muốn nhắm cả người chơi
    Việt trên CrazyGames — xem mục "Đa ngôn ngữ" ở trên.
 
+## Cơ chế "Cổng Dịch Chuyển" (thêm 19/08/2026)
+
+Ô 'G' = cổng đầu (ẩn, nhiều ô/màn — thường 2-4), ô 'P' = cổng đích (đúng 1 ô/màn,
+lộ diện sẵn từ đầu màn như S/E). Dẫm trúng cổng đầu KHÔNG gây thua (khác bẫy) —
+mèo bị "hút" sang cổng đích sau 1 nhịp ngắn, cổng đầu đó thành ô thường (đi lại
+qua không teleport nữa). Cổng đầu có SỐ RIÊNG (đếm cạnh 8 hướng, độc lập với số
+bẫy) — cố ý: 1 ô số giờ cõng 2 lớp đếm độc lập (`count` = bẫy, `count2` = cổng
+đầu), solver chạy `deduceLayer()` riêng cho từng lớp rồi giao (intersect) lại,
+xem `deduceAll()` trong script.js và `tools/level_checker.py` (đã đồng bộ 2 file
+— sửa 1 bên nhớ sửa bên kia). `tools/level_editor.html` CHƯA được cập nhật hỗ
+trợ vẽ G/P (chỉ soạn tay JSON hoặc dùng level_checker.py để kiểm). Level ví dụ:
+`levels/level51.json`.
+
+## Nghi vấn: cơ chế "ăn nhiều cá" (multi-stage) từng làm nhưng đã biến mất
+
+Trước đây (phiên làm việc trước) đã từng implement 1 cơ chế map nhiều giai đoạn
+("ăn cá xong bị hút sang map con tiếp theo") — nhưng code đó CHƯA BAO GIỜ được
+commit, và tới giờ không còn tồn tại trong `script.js` (đã grep xác nhận không
+còn `buildStageGrid`/`currentStageIdx`/`normalizeLevelData` gì cả). Nhiều khả
+năng bị mất khi các commit Leaderboard/Profile/Tabs (làm độc lập, không liên
+quan) ghi đè lên đúng những file đó trước khi kịp commit phần multi-stage. Nếu
+muốn cơ chế này quay lại thì coi như làm lại từ đầu.
+
 ## Việc còn thiếu (ưu tiên giảm dần, không gấp bằng mục CrazyGames ở trên)
 
 1. Màn "Chọn Level" cho người chơi thường — hiện chỉ chơi tuần tự được, không
