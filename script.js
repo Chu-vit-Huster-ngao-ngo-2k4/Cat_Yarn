@@ -3447,9 +3447,25 @@ function triggerGateTeleport(r, c) {
             addColorSparkleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
         }
         playerPos = { r: gateDestPos.r, c: gateDestPos.c };
-        updateCatPosition(false);
-        applyNeighborHighlight();
-        saveLevelProgress();
+        // Vừa bật sang cổng đích -> hé lộ vài ô AN TOÀN (không phải bẫy/cổng đầu) sát
+        // quanh nó (8 hướng) để người chơi có manh mối bắt đầu suy luận ngay, đỡ phải
+        // mò mẫm hoàn toàn từ đầu — GIỐNG kiểu Start luôn có sẵn 1 vùng biết trước.
+        // Không loang tiếp qua các ô "0" trong vùng này (chỉ đúng 8 ô sát cổng đích),
+        // và KHÔNG đụng tới bẫy/cổng đầu (giữ nguyên luật "chỉ lộ khi suy luận/dẫm trúng").
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = gateDestPos.r + dr, nc = gateDestPos.c + dc;
+                if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
+                const n = grid[nr][nc];
+                if (n.revealed || n.type === 'B' || n.type === 'G') continue;
+                n.revealed = true;
+                n.flagged = false;
+                pendingReveals.push({ r: nr, c: nc });
+                checkColorPickup(nr, nc, n);
+            }
+        }
+        render();
     }, CAT_MOVE_MS);
 }
 
