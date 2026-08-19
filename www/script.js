@@ -1569,10 +1569,36 @@ function genPlaceGates(rows, size, bombs, sPos) {
     }
     if (candidates.length < GEN_GATE_MIN + 1) return rows; // không đủ chỗ trống -> bỏ qua, giữ nguyên level
 
-    // Chọn cổng đích trước, ngẫu nhiên trong toàn bộ ứng viên.
-    const pIdx = Math.floor(Math.random() * candidates.length);
-    const pPos = candidates[pIdx];
-    candidates.splice(pIdx, 1);
+    // Chọn cổng đích: TRƯỚC ĐÂY random hoàn toàn trong mọi ứng viên -> hay rơi
+    // ngay trên/sát đường đi tự nhiên lúc giải bình thường, khiến người chơi mở
+    // trúng cổng đích mà chẳng cần đụng tới cổng đầu, và xung quanh cũng thường
+    // trống trải dễ thoát. Đổi sang CHẤM ĐIỂM giống genPlaceColor(): ưu tiên ô XA
+    // CẢ Start LẪN Đích (điểm = khoảng cách NHỎ HƠN trong 2 khoảng cách, càng cao
+    // càng xa cả đôi bên), CHỈ chọn trong nhóm 30% điểm cao nhất — buộc phải giải
+    // gần hết bàn cờ mới đụng tới khu vực đó, khó "tình cờ" mở trúng ngay từ đầu.
+    // Trong nhóm đó, ưu tiên tiếp vị trí có ÍT NHẤT 1 bẫy kề cạnh (8 ô xung quanh)
+    // để không rơi vào 1 khoảng trống an toàn tuyệt đối — quanh cổng đích vẫn cần
+    // suy luận cẩn thận mới thoát ra được, không phải cứ tới nơi là đi thẳng.
+    const pScored = candidates.map(pos => {
+        const distS = Math.max(Math.abs(pos[0] - sPos[0]), Math.abs(pos[1] - sPos[1]));
+        const distE = Math.max(Math.abs(pos[0] - (size - 1)), Math.abs(pos[1] - (size - 1)));
+        let nearbyBombs = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const nr = pos[0] + dr, nc = pos[1] + dc;
+                if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+                if (bombs.has(`${nr},${nc}`)) nearbyBombs++;
+            }
+        }
+        return { pos, score: Math.min(distS, distE), nearbyBombs };
+    });
+    pScored.sort((a, b) => b.score - a.score);
+    const pFarPool = pScored.slice(0, Math.max(1, Math.ceil(pScored.length * 0.3)));
+    const pWithBombNearby = pFarPool.filter(x => x.nearbyBombs > 0);
+    const pPool = (pWithBombNearby.length > 0 ? pWithBombNearby : pFarPool).map(x => x.pos);
+    const pPos = pPool[Math.floor(Math.random() * pPool.length)];
+    candidates.splice(candidates.findIndex(p => p[0] === pPos[0] && p[1] === pPos[1]), 1);
 
     // Cổng đầu: sắp theo khoảng cách Chebyshev tới cổng đích GIẢM DẦN, lấy nhóm xa
     // nhất rồi random trong đó (vừa đảm bảo xa, vừa có tính ngẫu nhiên giữa các lần).

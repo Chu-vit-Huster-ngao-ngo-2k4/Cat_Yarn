@@ -33,7 +33,7 @@ service cloud.firestore {
                    && request.resource.data.score >= 0
                    && request.resource.data.score <= 100000
                    && (!('avatar' in request.resource.data)
-                       || request.resource.data.avatar in ['avaCaby.png', 'avaCatSad.png', 'avaCoala.png', 'avaFish.png', 'avaHamster.png', 'avaPig.png'])
+                       || request.resource.data.avatar in ['avaCaby.png', 'avaCatRocket.png', 'avaCatSad.png', 'avaCoala.png', 'avaFish.png', 'avaHamster.png', 'avaOtter.png', 'avaPig.png'])
                    && (resource == null || request.resource.data.score >= resource.data.score);
     }
   }
