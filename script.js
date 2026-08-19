@@ -182,6 +182,9 @@ function openProfileModal() {
     document.getElementById('profile-name-input').value = getPlayerName();
     renderAvatarPicker();
     updateProfileModalAvatarPreview();
+    // Khớp ĐÚNG số đang hiện ở màn Home (renderHomeScreen()) — level đang/sắp
+    // chơi tiếp, không phải điểm xếp hạng (completedLevels.size, số màn ĐÃ QUA).
+    document.getElementById('profile-level-value').textContent = getNextPlayableLevel() + 1;
     document.getElementById('profile-modal').classList.add('show');
 }
 
@@ -191,6 +194,30 @@ function closeProfileModal() {
 
 document.getElementById('profile-modal').addEventListener('click', (e) => {
     if (e.target.id === 'profile-modal') closeProfileModal();
+});
+
+// ===== XEM hồ sơ NGƯỜI KHÁC (bấm vào hàng/avatar họ trên Bảng Xếp Hạng) — CHỈ
+// XEM, không có lưới chọn avatar/ô tên/nút Lưu (đó là #profile-modal, chỉ dành
+// cho hồ sơ CHÍNH MÌNH). row: đúng dữ liệu 1 dòng trả về từ fetchLeaderboard()
+// (leaderboard.js) — { id, name, score, avatar }. =====
+function openProfileViewModal(row) {
+    const file = row.avatar || pickDefaultPlayerAvatar(row.id);
+    document.getElementById('profile-view-avatar-img').src = playerAvatarPath(file);
+    document.getElementById('profile-view-name').textContent = row.name || '???';
+    // Điểm xếp hạng = số màn đã qua (completedLevels.size, xem submitLeaderboardScore())
+    // -> level đang/sắp chơi của họ = điểm đó + 1, khớp đúng cách tính ở chính
+    // mình (openProfileModal() dùng getNextPlayableLevel()+1, tương đương công
+    // thức này nếu chơi tuần tự không bỏ màn nào).
+    document.getElementById('profile-view-level-value').textContent = (row.score || 0) + 1;
+    document.getElementById('profile-view-modal').classList.add('show');
+}
+
+function closeProfileViewModal() {
+    document.getElementById('profile-view-modal').classList.remove('show');
+}
+
+document.getElementById('profile-view-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'profile-view-modal') closeProfileViewModal();
 });
 
 function updateProfileModalAvatarPreview() {
@@ -336,6 +363,12 @@ function buildLeaderboardRow(row, rank, myId, animate) {
     scoreEl.className = 'leaderboard-score';
     scoreEl.textContent = row.score || 0;
     rowEl.append(rankEl, avatarEl, nameEl, scoreEl);
+    // Bấm cả hàng (không chỉ riêng avatar) để mở xem hồ sơ — vùng bấm rộng hơn,
+    // dễ trúng trên di động. CHỈ XEM (openProfileViewModal()), không có gì để sửa
+    // dù bấm đúng hàng của chính mình — sửa hồ sơ luôn phải qua nút avatar riêng
+    // ở màn Home (openProfileModal()).
+    rowEl.classList.add('leaderboard-row-clickable');
+    rowEl.addEventListener('click', () => openProfileViewModal(row));
     return rowEl;
 }
 
@@ -381,6 +414,10 @@ function buildLeaderboardPodiumCard(row, rank) {
     scoreEl.className = 'podium-score';
     scoreEl.textContent = row.score || 0;
     card.append(rankEl, avatarWrap, nameEl, scoreEl);
+    // Bấm cả thẻ podium để mở xem hồ sơ, giống hàng danh sách bên dưới (xem
+    // buildLeaderboardRow()) — CHỈ XEM, không có gì để sửa.
+    card.classList.add('podium-card-clickable');
+    card.addEventListener('click', () => openProfileViewModal(row));
     return card;
 }
 
@@ -586,6 +623,18 @@ function playSound(type) {
         };
         meow(now, 480);
         meow(now + 0.22, 540);
+    }
+    else if (type === 'teleport') {
+        // Tiếng "vút" cổng dịch chuyển: cao độ trượt lên rồi trượt xuống nhanh,
+        // nghe khác hẳn mọi tiếng khác (không phải cảnh báo nguy hiểm như 'boom').
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(1100, now + 0.16);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.28);
+        gain.gain.setValueAtTime(sfxGain('sine'), now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
     }
 }
 
@@ -838,6 +887,12 @@ let currentLevelIdx = 0;
 // Kích thước lưới hiện tại — đổi theo từng level (5x5 -> 9x9), gán lại trong loadLevel().
 let GRID_ROWS = 5, GRID_COLS = 5;
 let grid, playerPos, isGameOver = false;
+let gateDestPos = null; // vị trí "cổng đích" (ô 'P') nếu màn có cơ chế cổng dịch chuyển — xem loadLevel()/revealAndMove()
+// true trong khoảng chờ ngắn giữa lúc dẫm trúng cổng đầu và lúc mèo thật sự bật
+// sang cổng đích (xem triggerGateTeleport()) — chặn input xen ngang, không thì
+// playerPos có thể bị 1 nước đi khác ghi đè trước khi setTimeout kịp chạy, khiến
+// mèo "dịch chuyển nhầm" về vị trí cổng đích dù đã đi chỗ khác.
+let isTeleporting = false;
 let catEl = null;
 let pendingReveals = []; // ô vừa lộ diện trong nước đi này, dùng để bung có thứ tự (loang)
 let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắng) — mạnh/nảy hơn bung thường
@@ -1113,7 +1168,10 @@ function buyBoosterWithAd(btn) {
 // Gom toàn bộ "đầu mối" hiện có (mỗi ô số đã mở, còn ô lân cận chưa biết) thành
 // 1 danh sách {unknown: Set các toạ độ 'r,c', remaining: số bẫy còn lại cần tìm}
 // — dùng chung cho cả Luật A/B (đơn) lẫn Luật C (so sánh cặp).
-function collectConstraints(deducedMine, deducedSafe) {
+// countField: 'count' (bẫy) hoặc 'count2' (cổng đầu) — 2 lớp đếm độc lập, xem
+// loadLevel(). Mặc định 'count' để không đổi hành vi mọi chỗ gọi cũ.
+function collectConstraints(deducedMine, deducedSafe, countField) {
+    countField = countField || 'count';
     const constraints = [];
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
@@ -1132,22 +1190,22 @@ function collectConstraints(deducedMine, deducedSafe) {
             const knownMines = hidden.filter(k => deducedMine.has(k));
             const unknown = hidden.filter(k => !deducedMine.has(k) && !deducedSafe.has(k));
             if (unknown.length === 0) continue;
-            constraints.push({ unknown: new Set(unknown), remaining: cell.count - knownMines.length });
+            constraints.push({ unknown: new Set(unknown), remaining: cell[countField] - knownMines.length });
         }
     }
     return constraints;
 }
 
-// Chạy 1 vòng suy luận đầy đủ (Luật A/B/C) tới khi không còn suy thêm được gì,
-// gom kết quả vào deducedSafe/deducedMine (dùng chung cho Gợi Ý và có thể tái sử
-// dụng ở nơi khác nếu cần sau này).
-function deduceAll() {
+// Chạy 1 vòng suy luận đầy đủ (Luật A/B/C) cho ĐÚNG 1 lớp đếm (countField) tới
+// khi không còn suy thêm được gì. Dùng để suy luận độc lập bẫy/cổng đầu — xem
+// deduceAll() bên dưới (chạy hàm này 2 lần, mỗi lần 1 lớp, rồi gộp kết quả).
+function deduceLayer(countField) {
     const deducedMine = new Set();
     const deducedSafe = new Set();
     let changed = true;
     while (changed) {
         changed = false;
-        const constraints = collectConstraints(deducedMine, deducedSafe);
+        const constraints = collectConstraints(deducedMine, deducedSafe, countField);
 
         // Luật A/B — từng đầu mối tự nó.
         for (const con of constraints) {
@@ -1179,6 +1237,19 @@ function deduceAll() {
         }
     }
     return { deducedSafe, deducedMine };
+}
+
+// Gộp 2 lớp suy luận ĐỘC LẬP (bẫy + cổng đầu, xem deduceLayer()): 1 ô chỉ thật
+// sự "an toàn để bước vào" (deducedSafe) nếu suy được an toàn ở CẢ 2 lớp — an
+// toàn bẫy nhưng chưa chắc an toàn cổng đầu thì vẫn có thể bị hút cổng, không
+// tính là an toàn hoàn toàn. deducedMine/deducedGate giữ riêng cho nơi khác cần
+// (vd cheat menu) — deducedSafe vẫn là trường chính, giữ tương thích ngược.
+function deduceAll() {
+    const bombLayer = deduceLayer('count');
+    const gateLayer = deduceLayer('count2');
+    const deducedSafe = new Set();
+    for (const k of bombLayer.deducedSafe) if (gateLayer.deducedSafe.has(k)) deducedSafe.add(k);
+    return { deducedSafe, deducedMine: bombLayer.deducedMine, deducedGate: gateLayer.deducedMine };
 }
 
 function findHintCell() {
@@ -1915,6 +1986,7 @@ function loadLevel(idx, tryResume) {
     GRID_ROWS = rows.length;
     GRID_COLS = rows[0].length;
     grid = [];
+    gateDestPos = null; // vị trí "cổng đích" (nếu màn có cơ chế cổng dịch chuyển) — xem revealAndMove()
 
     for (let r = 0; r < GRID_ROWS; r++) {
         grid.push([]);
@@ -1924,12 +1996,15 @@ function loadLevel(idx, tryResume) {
             if (ch === 'S') type = 'S';
             else if (ch === 'E') type = 'E';
             else if (ch === '#') type = 'B';
+            else if (ch === 'G') type = 'G'; // cổng đầu (ẩn, không gây thua — dẫm vào sẽ bị hút sang cổng đích)
+            else if (ch === 'P') type = 'P'; // cổng đích (lộ diện sẵn từ đầu màn, như S/E)
             // 'C'/'D' = ô giấu màu 1/màu 2 (cơ chế "tìm màu cho mèo") — vẫn là ô
             // thường (N), chỉ thêm cờ, không đổi cách tính số bẫy lân cận.
             const hasColor = (ch === 'C');
             const hasColor2 = (ch === 'D');
-            grid[r].push({ type, count: 0, revealed: false, flagged: false, hasColor, hasColor2 });
+            grid[r].push({ type, count: 0, count2: 0, revealed: false, flagged: false, hasColor, hasColor2 });
             if (type === 'S') playerPos = { r, c };
+            if (type === 'P') gateDestPos = { r, c };
         }
     }
     foundColor1 = false;
@@ -1944,26 +2019,29 @@ function loadLevel(idx, tryResume) {
     lastCatY = null;
     clearTimeout(catMoveSettleTimer);
 
-    // Tính số bẫy lân cận (8 hướng) cho từng ô, kiểu Minesweeper
+    // Tính số bẫy VÀ số cổng đầu lân cận (8 hướng) cho từng ô, kiểu Minesweeper —
+    // 2 lớp đếm ĐỘC LẬP (count = bẫy, count2 = cổng đầu), suy luận riêng ở deduceAll().
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
-            let cnt = 0;
+            let cnt = 0, cnt2 = 0;
             for (let dr = -1; dr <= 1; dr++) {
                 for (let dc = -1; dc <= 1; dc++) {
                     if (dr === 0 && dc === 0) continue;
                     const nr = r + dr, nc = c + dc;
                     if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
                     if (grid[nr][nc].type === 'B') cnt++;
+                    if (grid[nr][nc].type === 'G') cnt2++;
                 }
             }
             grid[r][c].count = cnt;
+            grid[r][c].count2 = cnt2;
         }
     }
 
-    // Ô xuất phát và đĩa cá luôn lộ diện làm mốc, chỉ đường đi ở giữa là ẩn
+    // Ô xuất phát, đĩa cá và cổng đích luôn lộ diện làm mốc, chỉ đường đi ở giữa là ẩn
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
-            if (grid[r][c].type === 'S' || grid[r][c].type === 'E') grid[r][c].revealed = true;
+            if (grid[r][c].type === 'S' || grid[r][c].type === 'E' || grid[r][c].type === 'P') grid[r][c].revealed = true;
         }
     }
 
@@ -2492,7 +2570,7 @@ function render(instant) {
             el.dataset.row = r;
             el.dataset.col = c;
 
-            if (cheatShowTraps && !cell.revealed && cell.type === 'B') {
+            if (cheatShowTraps && !cell.revealed && (cell.type === 'B' || cell.type === 'G')) {
                 el.classList.add('cheat-trap-reveal');
             }
 
@@ -2528,6 +2606,26 @@ function render(instant) {
                 else el.classList.add('fish-cell-plain'); // level thường (không cần tìm màu) -> vẫn cho ô cá nổi bật nhẹ, không để trắng trơn như ô số
                 setColorGlowDelay(el);
                 contentHTML = `<img class="fish-icon" src="icon/fissh.png" alt="cá">`;
+            } else if (cell.type === 'G') {
+                // Cổng đầu vừa dẫm trúng (đã "kích hoạt") — hiện icon xoáy ốc màu tím,
+                // KHÔNG dùng tông đỏ/đen như bẫy vì đây không phải hình phạt gây thua.
+                el.classList.add('gate-cell');
+                contentHTML = `
+                    <svg viewBox="0 0 40 40" style="width:32px; height:32px;">
+                        <circle cx="20" cy="20" r="15" fill="#ce93d8" stroke="#6a1b9a" stroke-width="3"/>
+                        <path d="M20 8 A12 12 0 1 1 8 20" stroke="#f3e5f5" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        <circle cx="20" cy="20" r="4" fill="#4a148c"/>
+                    </svg>`;
+            } else if (cell.type === 'P') {
+                // Cổng đích — lộ diện sẵn từ đầu màn như S/E, tông tím đậm hơn cổng đầu
+                // để phân biệt "đây là nơi ĐẾN", không phải cái cần né.
+                el.classList.add('gate-dest-cell');
+                contentHTML = `
+                    <svg viewBox="0 0 40 40" style="width:32px; height:32px;">
+                        <circle cx="20" cy="20" r="15" fill="#7b1fa2" stroke="#4a148c" stroke-width="3"/>
+                        <path d="M20 8 A12 12 0 1 1 8 20" stroke="#e1bee7" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        <circle cx="20" cy="20" r="4" fill="#f3e5f5"/>
+                    </svg>`;
             } else {
                 el.classList.add('revealed-safe');
                 if (cell.type === 'N' && cell.count > 0) {
@@ -2550,6 +2648,15 @@ function render(instant) {
                 const colorBadge = document.createElement('span');
                 colorBadge.className = cell.hasColor2 ? 'color-badge color-badge-2' : 'color-badge';
                 el.appendChild(colorBadge);
+            }
+
+            // Số cổng đầu lân cận (lớp đếm ĐỘC LẬP với số bẫy giữa ô) — huy hiệu nhỏ
+            // góc trên-phải, không đè lên số bẫy ở giữa hay đốm màu ở góc trên-trái.
+            if (cell.revealed && cell.type === 'N' && cell.count2 > 0) {
+                const gateBadge = document.createElement('span');
+                gateBadge.className = 'gate-count-badge';
+                gateBadge.textContent = cell.count2;
+                el.appendChild(gateBadge);
             }
 
             const revealIdx = revealOrder.get(r + ',' + c);
@@ -2817,7 +2924,7 @@ function toggleFlag(r, c, el) {
 }
 
 function handleCellClick(r, c) {
-    if (isGameOver || isWalking) return;
+    if (isGameOver || isWalking || isTeleporting) return;
 
     const dr = r - playerPos.r, dc = c - playerPos.c;
     if (Math.abs(dr) + Math.abs(dc) === 1) {
@@ -3012,7 +3119,7 @@ function attachCellPressHandlers(el, r, c) {
 }
 
 function handleMoveInput(targetR, targetC) {
-    if (isGameOver) return;
+    if (isGameOver || isTeleporting) return;
     if (targetR < 0 || targetR >= GRID_ROWS || targetC < 0 || targetC >= GRID_COLS) return;
     const dr = targetR - playerPos.r;
     const dc = targetC - playerPos.c;
@@ -3316,11 +3423,45 @@ function revealAndMove(r, c) {
         return;
     }
 
-    // Ô thường: nếu không có bẫy lân cận nào, tự mở loang các ô an toàn xung quanh.
-    // Chỉ áp dụng cho ô loại N — ô xuất phát (S) không được loang lại mỗi khi mèo quay về đó.
-    if (cell.type === 'N' && cell.count === 0) {
+    if (cell.type === 'G') {
+        // wasHidden=false nghĩa là ô này đã bị dẫm trúng (và revealed=true) từ trước
+        // rồi -> giờ chỉ là ô thường, đi xuyên qua bình thường, không teleport lại.
+        if (!wasHidden) return;
+        triggerGateTeleport(r, c);
+        return;
+    }
+
+    // Ô thường: nếu không có bẫy VÀ không có cổng đầu lân cận nào, tự mở loang các
+    // ô an toàn xung quanh. Chỉ áp dụng cho ô loại N — ô xuất phát (S) không được
+    // loang lại mỗi khi mèo quay về đó.
+    if (cell.type === 'N' && cell.count === 0 && cell.count2 === 0) {
         floodReveal(r, c);
     }
+}
+
+// Cổng đầu KHÔNG gây thua (khác bẫy) — dẫm trúng sẽ bị "hút" sang cổng đích
+// (gateDestPos, luôn lộ diện sẵn từ đầu màn) sau 1 nhịp ngắn để thấy hiệu ứng
+// mèo vừa bước vào cổng, rồi mới bật ra ở đầu kia. Ô cổng đầu vừa dẫm trúng thì
+// coi như đã "tháo ngòi" (đã revealed=true ở đầu revealAndMove()) — quay lại ô
+// đó lần sau chỉ là ô thường, không teleport lại.
+function triggerGateTeleport(r, c) {
+    const myGeneration = levelGeneration;
+    isTeleporting = true;
+    playSound('teleport');
+    updateStatus(t('status_gate_teleport'), '#9c27b0');
+    setTimeout(() => {
+        isTeleporting = false;
+        if (myGeneration !== levelGeneration || isGameOver || !gateDestPos) return;
+        const gateEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+        if (gateEl) {
+            const rect = gateEl.getBoundingClientRect();
+            addColorSparkleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }
+        playerPos = { r: gateDestPos.r, c: gateDestPos.c };
+        updateCatPosition(false);
+        applyNeighborHighlight();
+        saveLevelProgress();
+    }, CAT_MOVE_MS);
 }
 
 // Lúc thắng: toàn bộ ô CHƯA từng mở sẽ MỞ RA (hiện đúng số/bẫy bên trong, như mở
@@ -3397,12 +3538,12 @@ function floodReveal(startR, startC) {
                 const nr = cr + dr, nc = cc + dc;
                 if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
                 const n = grid[nr][nc];
-                if (n.revealed || n.type === 'B') continue;
+                if (n.revealed || n.type === 'B' || n.type === 'G') continue; // cổng đầu cũng KHÔNG tự loang mở như bẫy — chỉ lộ khi suy luận/dẫm trúng
                 n.revealed = true;
                 n.flagged = false;
                 pendingReveals.push({ r: nr, c: nc });
                 checkColorPickup(nr, nc, n);
-                if (n.type === 'N' && n.count === 0) queue.push([nr, nc]);
+                if (n.type === 'N' && n.count === 0 && n.count2 === 0) queue.push([nr, nc]);
             }
         }
     }
@@ -3630,7 +3771,7 @@ if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App
 // Mọi nút UI bấm được (nút thường, icon tròn, nút đóng popup, khối chọn level)
 // — dùng chung cho cả 2 cơ chế bên dưới: hiệu ứng lõm khi giữ tay, VÀ độ trễ
 // trước khi hành động thật sự chạy.
-const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-level-display, .home-tab, .home-avatar-btn';
+const PRESSABLE_SELECTOR = '.btn-piffle, .modal-close-btn, .icon-btn, .home-level-display, .home-tab, .home-avatar-btn, .leaderboard-row-clickable, .podium-card-clickable';
 
 // Hiệu ứng "lõm xuống" khi bấm nút — không chỉ dựa vào :active CSS thuần (không
 // đáng tin cậy trên vài WebView Android, nhất là nút vừa hiện trong popup) mà tự

@@ -98,6 +98,7 @@ hint_bar_neighbor_btn,Thử bấm nút này xem sao!,Try tapping this button!
 hint_bar_start_safe,💡 Mẹo: {count} ô khoanh xanh sát ô xuất phát LUÔN an toàn!,💡 Tip: the {count} highlighted cells next to the start are ALWAYS safe!
 status_life_lost,"💔 Mất 1 mạng! Bẫy đã tháo ngòi, còn {lives} mạng, đi tiếp thôi!","💔 Lost a life! The trap is defused, {lives} lives left, keep going!"
 status_boom_practice,"💥 Bụp! Đây là màn làm quen nên không mất mạng đâu, đi tiếp thoải mái!","💥 Boom! This is a practice level so no lives lost, keep going!"
+status_gate_teleport,"🌀 Ối! Mèo vừa lọt vào cổng dịch chuyển, bị hút sang cổng đích rồi!","🌀 Whoa! The cat fell into a portal and got pulled to the destination gate!"
 tutorial_step_1,Chạm ô có bàn tay 👇 để mèo bước tới!,Tap the cell the hand 👇 points at to move the cat!
 tutorial_step_2,Một vùng vừa mở ra! Số trên ô = số bẫy ở 8 ô sát nó.,An area just opened! The number on a cell = how many traps are in its 8 neighbors.
 tutorial_step_3,"Chạm ô số 1 để mèo đứng lên, soi rõ 8 ô quanh nó!",Tap the cell with 1 to stand on it and reveal the 8 cells around it!
