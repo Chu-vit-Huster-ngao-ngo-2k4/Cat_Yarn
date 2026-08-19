@@ -214,6 +214,13 @@
            DEV_LEVEL_TOOLS/showSettings() trong script.js), ẩn hẳn với level tĩnh
            và tắt hẳn nếu DEV_LEVEL_TOOLS = false lúc build bản thật. -->
       <div class="settings-row" id="dev-regen-row" style="display:none;">
+        <select id="dev-regen-mechanic-select" class="dev-regen-select">
+          <option value="">🎲 Ngẫu nhiên (mặc định)</option>
+          <option value="none">💣 Chỉ bẫy thường</option>
+          <option value="gate">🌀 Cổng dịch chuyển</option>
+          <option value="color">🎨 Tìm màu</option>
+          <option value="link">🔗 Liên kết</option>
+        </select>
         <button class="btn-piffle btn-yellow" onclick="devRegenerateCurrentLevel()">🎲 [Dev] Gen Lại Level</button>
       </div>
     </div>
@@ -266,6 +273,10 @@
           <input type="text" id="profile-name-input" maxlength="16" data-i18n-placeholder="leaderboard_name_placeholder" placeholder="Đặt biệt danh của bạn">
           <span class="profile-name-edit-icon">✏️</span>
         </div>
+        <div class="profile-level-badge">
+          <span class="profile-level-label" data-i18n="home_level_label">Level</span>
+          <span class="profile-level-value" id="profile-level-value">1</span>
+        </div>
       </div>
 
       <div class="profile-tabs">
@@ -276,6 +287,23 @@
 
       <div class="modal-actions">
         <button class="btn-piffle btn-green" onclick="savePlayerProfile()" data-i18n="profile_save_btn">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Xem hồ sơ NGƯỜI KHÁC (bấm vào hàng/avatar họ trên Bảng Xếp Hạng) — CHỈ XEM,
+       không có lưới chọn avatar/ô tên/nút Lưu như #profile-modal (đó là hồ sơ của
+       CHÍNH MÌNH). Xem openProfileViewModal() trong script.js. -->
+  <div id="profile-view-modal" class="modal-overlay">
+    <div class="modal-card modal-card-closable profile-view-card">
+      <button class="modal-close-btn" onclick="closeProfileViewModal()" title="Đóng" data-i18n-title="settings_close_title">×</button>
+      <span class="profile-view-avatar-frame">
+        <img class="profile-view-avatar-img" id="profile-view-avatar-img" alt="">
+      </span>
+      <h2 class="modal-title profile-view-name" id="profile-view-name" style="color:#4a3022;"></h2>
+      <div class="profile-level-badge">
+        <span class="profile-level-label" data-i18n="home_level_label">Level</span>
+        <span class="profile-level-value" id="profile-view-level-value">1</span>
       </div>
     </div>
   </div>

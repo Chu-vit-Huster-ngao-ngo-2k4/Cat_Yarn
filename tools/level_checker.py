@@ -17,6 +17,27 @@ meo nhuom NUA THAN moi mau). Ve mat solver, C/D deu la o thuong binh thuong
 (khong bay) - KHONG kiem tra co suy luan toi duoc hay khong, vi day la co che
 dat ngau nhien tren bat ky o khong phai bay nao.
 
+G = cong dau (co che "cong dich chuyen" - an, KHONG gay thua, dam trung se bi
+"hut" sang cong dich), P = cong dich (dung 1 o, lo dien san tu dau man nhu S/E).
+Neu man co G thi PHAI co dung 1 P (va nguoc lai). Cong dau KHONG can suy luan
+duoc chinh xac bang logic (khac bay) - script.js chi to tim mo bao "gan day co
+cong" (khong lo so luong chinh xac), nen solver o day CHI kiem tra kha nang giai
+duoc theo lop BAY nhu cu; count2 (so cong dau ke 8 huong) van duoc tinh trong
+build_grid() de doi chieu neu can nhung khong dua vao deduce()/simulate().
+
+'a'-'d' = bay LIEN KET nhom a/b/c/d (van la bay binh thuong ve moi mat - tinh vao
+count, gay thua khi dam trung - chi THEM co nhom), 'w'-'z' = cong dau LIEN KET
+CUNG nhom voi chu cai a-d tuong ung (w<->a, x<->b, y<->c, z<->d) nhung ban than
+la CONG chu khong phai bay, '1'-'4' = o thuong LIEN KET nhom 1/2/3/4 (van la o
+thuong binh thuong, chi them co nhom).
+
+Co che Lien Ket la "CUNG KICH HOAT" (KHONG con "cung loai" nua - da bo Luat D):
+1 nhom co the tron bay + cong dau, dam trung 1 o thi CAC O CON LAI trong nhom
+cung "kich hoat" theo NGAY (bay tu thao ngoi, cong dau tu hut sang cong dich
+that su) - xem revealLinkedPartners() trong script.js. VI VAY solver o day
+KHONG suy luan duoc gi tu co nhom nua (chi con y nghia luc choi that, khong con
+la cong cu ho tro logic) - nhom van phai co >= 2 o (khong thi vo nghia).
+
 Cach dung:
   python tools/level_checker.py levels/level01.json      # kiem 1 file JSON co san
   python tools/level_checker.py --all                    # kiem toan bo levels/*.json
@@ -28,7 +49,7 @@ import os
 import json
 import argparse
 
-ALLOWED_CHARS = set('SE#.CD')
+ALLOWED_CHARS = set('SE#.CDGPabcd1234wxyz')
 DIRS_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 DIRS_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
@@ -57,6 +78,8 @@ def parse_rows(rows):
     e_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'E']
     c_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'C']
     d_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'D']
+    g_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'G']
+    p_positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == 'P']
     if len(s_positions) != 1:
         raise LevelError(f"Phai co dung 1 o 'S' (xuat phat), hien co {len(s_positions)}.")
     if len(e_positions) != 1:
@@ -65,34 +88,73 @@ def parse_rows(rows):
         raise LevelError(f"Toi da 1 o 'C' (giau mau 1), hien co {len(c_positions)}.")
     if len(d_positions) > 1:
         raise LevelError(f"Toi da 1 o 'D' (giau mau 2), hien co {len(d_positions)}.")
+    if len(p_positions) > 1:
+        raise LevelError(f"Toi da 1 o 'P' (cong dich), hien co {len(p_positions)}.")
+    if g_positions and len(p_positions) != 1:
+        raise LevelError(f"Co {len(g_positions)} o 'G' (cong dau) nhung khong co dung 1 o 'P' (cong dich) di kem.")
+    if p_positions and not g_positions:
+        raise LevelError("Co o 'P' (cong dich) nhung khong co o 'G' (cong dau) nao ca - vo nghia.")
 
-    return rows_count, width, s_positions[0], e_positions[0]
+    # Nhom lien ket: 'a'-'d' (bay) va 'w'-'z' (cong dau, w<->a x<->b y<->c z<->d)
+    # CUNG 1 nhom - phai gop lai roi moi dem tong so o.
+    gate_link_pair = {'w': 'a', 'x': 'b', 'y': 'c', 'z': 'd'}
+    for canon in 'abcd':
+        gate_char = [k for k, v in gate_link_pair.items() if v == canon][0]
+        positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] in (canon, gate_char)]
+        if positions and len(positions) < 2:
+            raise LevelError(f"Nhom lien ket '{canon}' chi co 1 o ({positions[0]}) - phai >= 2 o moi co nghia.")
+    for group_char in '1234':
+        positions = [(r, c) for r in range(rows_count) for c in range(width) if rows[r][c] == group_char]
+        if positions and len(positions) < 2:
+            raise LevelError(f"Nhom lien ket '{group_char}' chi co 1 o ({positions[0]}) - phai >= 2 o moi co nghia.")
+
+    return rows_count, width, s_positions[0], e_positions[0], g_positions, (p_positions[0] if p_positions else None)
 
 
 def build_grid(rows, rows_count, width):
-    """type: 'S' | 'E' | 'B' (bay) | 'N' (thuong); count = so bay ke 8 huong."""
+    """type: 'S' | 'E' | 'B' (bay) | 'G' (cong dau) | 'P' (cong dich) | 'N' (thuong);
+    count = so bay ke 8 huong, count2 = so cong dau ke 8 huong (lop doc lap).
+    link_group: None hoac ky tu nhom ('a'-'d' bay lien ket, '1'-'4' o thuong lien ket)."""
     grid = [[None] * width for _ in range(rows_count)]
     for r in range(rows_count):
         for c in range(width):
             ch = rows[r][c]
+            link_group = None
             if ch == 'S':
                 t = 'S'
             elif ch == 'E':
                 t = 'E'
             elif ch == '#':
                 t = 'B'
+            elif ch == 'G':
+                t = 'G'
+            elif ch == 'P':
+                t = 'P'
+            elif ch in 'abcd':
+                t = 'B'
+                link_group = ch
+            elif ch in 'wxyz':
+                t = 'G'
+                link_group = {'w': 'a', 'x': 'b', 'y': 'c', 'z': 'd'}[ch]
+            elif ch in '1234':
+                t = 'N'
+                link_group = ch
             else:
                 t = 'N'
-            grid[r][c] = {'type': t, 'count': 0}
+            grid[r][c] = {'type': t, 'count': 0, 'count2': 0, 'link_group': link_group}
 
     for r in range(rows_count):
         for c in range(width):
-            cnt = 0
+            cnt, cnt2 = 0, 0
             for dr, dc in DIRS_8:
                 nr, nc = r + dr, c + dc
-                if 0 <= nr < rows_count and 0 <= nc < width and grid[nr][nc]['type'] == 'B':
-                    cnt += 1
+                if 0 <= nr < rows_count and 0 <= nc < width:
+                    if grid[nr][nc]['type'] == 'B':
+                        cnt += 1
+                    if grid[nr][nc]['type'] == 'G':
+                        cnt2 += 1
             grid[r][c]['count'] = cnt
+            grid[r][c]['count2'] = cnt2
     return grid
 
 
@@ -104,15 +166,15 @@ def flood_reveal(grid, rows_count, width, revealed, r, c):
             nr, nc = cr + dr, cc + dc
             if not (0 <= nr < rows_count and 0 <= nc < width):
                 continue
-            if revealed[nr][nc] or grid[nr][nc]['type'] == 'B':
+            if revealed[nr][nc] or grid[nr][nc]['type'] in ('B', 'G'):
                 continue
             revealed[nr][nc] = True
-            if grid[nr][nc]['type'] == 'N' and grid[nr][nc]['count'] == 0:
+            if grid[nr][nc]['type'] == 'N' and grid[nr][nc]['count'] == 0 and grid[nr][nc]['count2'] == 0:
                 queue.append((nr, nc))
 
 
-def collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe):
-    """Gom moi 'dau moi' hien co: {unknown: set toa do, remaining: so bay con lai}."""
+def collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe, count_field):
+    """Gom moi 'dau moi' hien co cho 1 LOP dem (count_field): {unknown: set toa do, remaining: so con lai}."""
     constraints = []
     for r in range(rows_count):
         for c in range(width):
@@ -130,25 +192,26 @@ def collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced
             unknown = {k for k in hidden if k not in deduced_mine and k not in deduced_safe}
             if not unknown:
                 continue
-            constraints.append({'unknown': unknown, 'remaining': cell['count'] - len(known_mines)})
+            constraints.append({'unknown': unknown, 'remaining': cell[count_field] - len(known_mines)})
     return constraints
 
 
-def deduce(grid, rows_count, width, revealed):
+def deduce_layer(grid, rows_count, width, revealed, count_field):
     """
-    Y het findHintCell() trong script.js: constraint propagation cong don, gom 3 luat:
-      Luat A/B (1 dau moi, tu no): het bay can tim -> con lai AN TOAN; so o chua biet
-        dung bang so bay con lai -> con lai la BAY.
+    Y het findHintCell()/deduceLayer() trong script.js: constraint propagation cong don
+    tren 1 LOP dem doc lap (count_field), gom 3 luat:
+      Luat A/B (1 dau moi, tu no): het (bay/cong dau) can tim -> con lai AN TOAN; so o
+        chua biet dung bang so con lai -> con lai la (bay/cong dau).
       Luat C (so sanh 2 dau moi CHONG LAN - pattern "1-2" kinh dien cua Minesweeper):
         neu vung o-chua-biet cua dau moi A la tap CON cua dau moi B, phan CHENH LECH
-        (B tru A) phai chua dung (remaining_B - remaining_A) bay.
+        (B tru A) phai chua dung (remaining_B - remaining_A) o loai nay.
     """
     deduced_safe = set()
     deduced_mine = set()
     changed = True
     while changed:
         changed = False
-        constraints = collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe)
+        constraints = collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced_safe, count_field)
 
         # Luat A/B - tung dau moi tu no.
         for con in constraints:
@@ -183,7 +246,17 @@ def deduce(grid, rows_count, width, revealed):
                         if k not in deduced_mine:
                             deduced_mine.add(k)
                             changed = True
+
+        # Luat D (suy luan theo nhom lien ket) DA BO - co che Lien Ket gio la "cung
+        # kich hoat" chu khong con "cung loai" nua (xem ghi chu dau file), nen
+        # khong the suy luan cheo giua cac o cung nhom duoc nua.
     return deduced_safe, deduced_mine
+
+
+def deduce(grid, rows_count, width, revealed):
+    """CHI suy luan theo lop BAY - dung y het deduceAll() trong script.js (cong dau
+    khong can suy luan duoc chinh xac, xem ghi chu dau file)."""
+    return deduce_layer(grid, rows_count, width, revealed, 'count')
 
 
 def simulate(grid, rows_count, width, s_pos, e_pos):
@@ -191,11 +264,16 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     Tra ve dict:
       first_move_bad: list cac o bay nam sat Start (vi pham luat "khong doan nuoc dau")
       reached_e: co toi duoc dia ca thuan tuy bang suy luan khong
-      fully_solved: toan bo o khong-bay co duoc mo het khong (khong con o nao phai doan)
-      stuck_cells: cac o thuong (khong phai bay) con bi ket lai, can doan mo
+      fully_solved: toan bo o thuong co duoc mo het khong (khong con o nao phai doan)
+      stuck_cells: cac o thuong (khong phai bay/cong dau) con bi ket lai, can doan mo
     """
     revealed = [[False] * width for _ in range(rows_count)]
     revealed[s_pos[0]][s_pos[1]] = True
+    # Cong dich (neu co) luon lo dien san tu dau man, giong S/E.
+    for r in range(rows_count):
+        for c in range(width):
+            if grid[r][c]['type'] == 'P':
+                revealed[r][c] = True
 
     first_move_bad = []
     for dr, dc in DIRS_4:
@@ -204,12 +282,15 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
             first_move_bad.append((nr, nc))
 
     # Nuoc di dau tien luon duoc dam bao an toan theo thiet ke -> tu mo cac o ke Start
-    # (chi tinh cac o khong phai bay; neu co bay canh Start thi da bao loi o tren roi).
+    # (chi tinh cac o khong phai bay; neu co bay canh Start thi da bao loi o tren roi.
+    # Cong dau (G) van KHONG tu mo o day - giong game that, khong bao gio tu lo ra
+    # ma phai dam trung/khong con hidden - nhung co mat canh Start khong tinh la loi
+    # vi khong gay thua, khac bay).
     for dr, dc in DIRS_4:
         nr, nc = s_pos[0] + dr, s_pos[1] + dc
-        if 0 <= nr < rows_count and 0 <= nc < width and not revealed[nr][nc] and grid[nr][nc]['type'] != 'B':
+        if 0 <= nr < rows_count and 0 <= nc < width and not revealed[nr][nc] and grid[nr][nc]['type'] not in ('B', 'G'):
             revealed[nr][nc] = True
-            if grid[nr][nc]['type'] == 'N' and grid[nr][nc]['count'] == 0:
+            if grid[nr][nc]['type'] == 'N' and grid[nr][nc]['count'] == 0 and grid[nr][nc]['count2'] == 0:
                 flood_reveal(grid, rows_count, width, revealed, nr, nc)
 
     def e_reachable():
@@ -231,7 +312,7 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
             if not revealed[r][c]:
                 revealed[r][c] = True
                 newly_revealed = True
-                if grid[r][c]['type'] == 'N' and grid[r][c]['count'] == 0:
+                if grid[r][c]['type'] == 'N' and grid[r][c]['count'] == 0 and grid[r][c]['count2'] == 0:
                     flood_reveal(grid, rows_count, width, revealed, r, c)
         if not reached_e:
             reached_e = e_reachable()
@@ -241,7 +322,7 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     stuck_cells = [
         (r, c)
         for r in range(rows_count) for c in range(width)
-        if not revealed[r][c] and grid[r][c]['type'] != 'B'
+        if not revealed[r][c] and grid[r][c]['type'] not in ('B', 'G')
     ]
     fully_solved = len(stuck_cells) == 0
 
@@ -262,7 +343,7 @@ def check_rows(rows, name):
     """Chay toan bo kiem tra tren 1 level (list of row-strings), in bao cao, tra ve True/False."""
     print(f"=== {name} ===")
     try:
-        rows_count, width, s_pos, e_pos = parse_rows(rows)
+        rows_count, width, s_pos, e_pos, g_positions, p_pos = parse_rows(rows)
     except LevelError as e:
         print(f"  LOI DINH DANG: {e}")
         return False
@@ -271,7 +352,11 @@ def check_rows(rows, name):
     result = simulate(grid, rows_count, width, s_pos, e_pos)
 
     ok = True
-    print(f"  Kich thuoc: {rows_count}x{width}  |  Start={cell_label(s_pos)}  Dia ca={cell_label(e_pos)}")
+    extra = f"  |  Cong dau={len(g_positions)}  Cong dich={cell_label(p_pos)}" if g_positions else ""
+    link_chars_used = sorted(set(ch for row in rows for ch in row if ch in 'abcd1234wxyz'))
+    if link_chars_used:
+        extra += f"  |  Nhom lien ket: {', '.join(link_chars_used)}"
+    print(f"  Kich thuoc: {rows_count}x{width}  |  Start={cell_label(s_pos)}  Dia ca={cell_label(e_pos)}{extra}")
 
     if result['first_move_bad']:
         ok = False

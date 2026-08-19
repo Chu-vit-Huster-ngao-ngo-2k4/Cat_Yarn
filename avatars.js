@@ -2,4 +2,4 @@
 // script đó (quét icon/ava/) mỗi khi thêm/xoá/đổi tên ảnh avatar, rồi nhớ
 // đồng bộ sang www/ + cập nhật danh sách cho phép trong firestore.rules
 // (xem hướng dẫn đầy đủ trong chính file build_avatar_list.py).
-const PLAYER_AVATAR_FILES = ["avaCaby.png", "avaCatSad.png", "avaCoala.png", "avaFish.png", "avaHamster.png", "avaPig.png"];
+const PLAYER_AVATAR_FILES = ["avaCaby.png", "avaCatRocket.png", "avaCatSad.png", "avaFish.png", "avaHamster.png", "avaOtter.png", "avaPig.png"];

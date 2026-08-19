@@ -123,6 +123,94 @@ lìm nếu không biết thao tác bí mật.
 6. Cân nhắc lại default ngôn ngữ (đang là tiếng Anh) nếu muốn nhắm cả người chơi
    Việt trên CrazyGames — xem mục "Đa ngôn ngữ" ở trên.
 
+## Cơ chế "Cổng Dịch Chuyển" (thêm 19/08/2026) — TẠM DỪNG phát triển thêm
+
+Đã hoạt động đầy đủ, không xoá code, nhưng KHÔNG tích hợp thêm/mở rộng nữa cho
+tới khi được yêu cầu lại (người dùng bảo "tạm dừng cơ chế này lại" khi chuyển
+sang làm cơ chế Liên Kết bên dưới).
+
+Ô 'G' = cổng đầu (ẩn, nhiều ô/màn — thường 2-4), ô 'P' = cổng đích (đúng 1 ô/màn,
+lộ diện sẵn từ đầu màn như S/E). Dẫm trúng cổng đầu KHÔNG gây thua (khác bẫy) —
+mèo bị "hút" sang cổng đích sau 1 nhịp ngắn (tự hé lộ thêm vài ô an toàn quanh
+cổng đích lúc đó để có manh mối suy luận tiếp), cổng đầu đó thành ô thường (đi
+lại qua không teleport nữa, vẫn hiện số bẫy bình thường nếu có).
+
+**Cổng đầu KHÔNG có số riêng** (đã thử rồi bỏ — 2 số/ô gây rối, xem lịch sử
+commit) — chỉ suy luận theo lớp BẪY như cũ (`deduceAll()` trong script.js /
+`deduce()` trong `tools/level_checker.py` chỉ dùng field `count`, field `count2`
+vẫn được tính ở `loadLevel()`/`build_grid()` nhưng CHỈ để tô màu, không dùng để
+suy luận). Ô 'N' đã mở mà có `count2 > 0` (cổng đầu kề cạnh) → tô nền TÍM MỜ
+(class `gate-nearby`) báo "gần đây có cổng", không lộ chính xác bao nhiêu. Đúng
+ô cổng đầu vừa dẫm trúng → tô nền ĐEN (class `gate-origin-cell`), số bẫy (nếu
+có) viền trắng để đọc rõ — phân biệt hẳn với các ô tím mờ xung quanh (bản thân
+không phải cổng). Vì không cần suy luận được cổng đầu bằng logic (không gây
+thua), level_checker.py cũng KHÔNG bắt buộc gate phải "giải được" như bẫy, chỉ
+bẫy mới bắt buộc.
+
+Đã tích hợp vào cả 3 nơi tạo level:
+- Level tĩnh tay: `levels/level51-53.json` (52-53 là 9x9 khó, cổng đầu đặt xa
+  cổng đích nhất có thể — dùng Chebyshev distance).
+- `tools/level_editor.html` — có 2 mode vẽ riêng ("🌀 Cổng Đầu", "🎯 Cổng Đích"),
+  soát lỗi đúng 1 P khi có G (và ngược lại), xuất/nạp JSON có G/P bình thường.
+- Level tự sinh vô tận (`generateProceduralLevel()`/`genPlaceGates()` trong
+  script.js) — ~35% level tự sinh có cơ chế này (`GEN_GATE_CHANCE`), 2-4 cổng
+  đầu, đặt xa cổng đích nhất có thể (cùng thuật toán Chebyshev như level tay).
+
+## Cơ chế "Liên Kết" (thêm 19/08/2026, đổi thiết kế cùng ngày) — TẠM DỪNG phát triển thêm
+
+**Bản đầu** (đã bỏ): các ô cùng nhóm LUÔN cùng loại (toàn bẫy/toàn an toàn), có
+Luật D hỗ trợ suy luận. Nhận định sau khi làm xong: chỉ làm game DỄ hơn (biết
+trước "cùng phe" qua màu là giải quyết hết), không tăng thử thách — xem lịch sử
+commit nếu cần đọc lại chi tiết bản này.
+
+**Bản hiện tại** ("CÙNG KÍCH HOẠT" thay vì "cùng loại"): 1 nhóm giờ có thể TRỘN
+LẪN loại ô — ký tự `a`-`d` = bẫy trong nhóm a/b/c/d, `w`-`z` = cổng đầu CÙNG
+nhóm với chữ cái tương ứng (w↔a, x↔b, y↔c, z↔d, ban thân là cổng chứ không phải
+bẫy), `1`-`4` = ô thường trong nhóm 1/2/3/4 (chỉ để mở chuỗi, không có hiệu ứng
+gì đặc biệt). Tối thiểu 2 ô/nhóm (đếm gộp cả biến thể bẫy lẫn cổng của cùng 1
+nhóm). Đã BỎ HẲN Luật D — nhóm không còn ý nghĩa hỗ trợ suy luận nữa, `deduceAll()`/
+`deduce()` chỉ còn đúng Luật A/B/C như trước khi có cơ chế này.
+
+Dẫm trúng 1 ô trong nhóm → CÁC Ô CÒN LẠI cùng nhóm "kích hoạt" theo NGAY
+(`revealLinkedPartners()` trong script.js), mỗi ô lãnh ĐÚNG hiệu ứng của loại nó:
+- Ô bẫy trong nhóm: LÃNH NGUYÊN 1 lần trúng bẫy thật (`applyBombHit()` — tách
+  riêng từ nhánh `cell.type === 'B'` cũ trong `revealAndMove()` để dùng lại
+  được) — dẫm trúng 1 ô link với N quả bẫy khác thì mất đúng N+1 tym dồn lại,
+  KHÔNG còn tự tháo ngòi miễn phí như bản đầu nữa (theo yêu cầu "trừ tym dồn").
+  `revealAndMove()` tự dừng ngay (`if (isGameOver) return;`) nếu tổ hợp bẫy
+  link khiến thua giữa chừng, tránh gọi `applyBombHit()` 2 lần lên chính ô vừa
+  bước vào (nếu bản thân nó cũng là 1 ô bẫy) → tránh hiện popup Thua lặp lại.
+- Ô cổng đầu trong nhóm: kích hoạt teleport THẬT SỰ (gọi lại `triggerGateTeleport()`
+  y hệt lúc dẫm trực tiếp) — vd dẫm trúng bẫy link với cổng thì vừa mất mạng/nổ
+  bẫy VỪA bị hút sang cổng đích luôn, 2 hậu quả cộng dồn.
+- Ô thường trong nhóm: mở bình thường (tự loang tiếp nếu count=0).
+
+Ngoại lệ AN TOÀN: booster "Soi Bẫy" (`revealRandomBomb()`) gọi
+`revealLinkedPartners(r, c, true)` — tham số `forceSafe=true` khiến bẫy/cổng
+trong nhóm CHỈ lộ ra + tháo ngòi/không teleport thật, không áp hậu quả thật —
+vì booster đó cam kết luôn an toàn tuyệt đối, dùng nó không được phép bị trừ
+mạng ngoài ý muốn.
+
+Hành vi khác giữ nguyên từ bản đầu: màu nền nhóm (tông lạnh, `LINK_COLOR_PALETTE`)
+hiện sẵn khi còn ẩn, mất tint khi mở ra; cắm/gỡ cờ 1 ô đồng bộ cả nhóm
+(`toggleFlag()`). Bộ tự sinh (`genPlaceLinkGroup()`) và `levels/level54.json`
+hiện CHƯA cập nhật theo bản thiết kế mới (vẫn chỉ tạo nhóm đồng nhất loại a-d/1-4,
+không tạo combo bẫy+cổng) — vẫn chạy được bình thường (vẫn là 1 trường hợp con
+hợp lệ của thiết kế mới) nhưng chưa khai thác hết khả năng combo. `tools/level_editor.html`
+CHƯA hỗ trợ vẽ nhóm liên kết (chỉ soạn tay JSON hoặc dùng level_checker.py).
+
+Không xoá code, nhưng KHÔNG tích hợp thêm/mở rộng nữa cho tới khi được yêu cầu lại.
+
+## Nghi vấn: cơ chế "ăn nhiều cá" (multi-stage) từng làm nhưng đã biến mất
+
+Trước đây (phiên làm việc trước) đã từng implement 1 cơ chế map nhiều giai đoạn
+("ăn cá xong bị hút sang map con tiếp theo") — nhưng code đó CHƯA BAO GIỜ được
+commit, và tới giờ không còn tồn tại trong `script.js` (đã grep xác nhận không
+còn `buildStageGrid`/`currentStageIdx`/`normalizeLevelData` gì cả). Nhiều khả
+năng bị mất khi các commit Leaderboard/Profile/Tabs (làm độc lập, không liên
+quan) ghi đè lên đúng những file đó trước khi kịp commit phần multi-stage. Nếu
+muốn cơ chế này quay lại thì coi như làm lại từ đầu.
+
 ## Việc còn thiếu (ưu tiên giảm dần, không gấp bằng mục CrazyGames ở trên)
 
 1. Màn "Chọn Level" cho người chơi thường — hiện chỉ chơi tuần tự được, không

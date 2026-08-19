@@ -356,12 +356,12 @@
       pointer-events: none;
     }
 
-    /* 2 tab bên cạnh nhau share đúng 1 đường viền (không bị viền đôi dày gấp 2 ở
-       chỗ giáp nhau) — tab ở giữa bỏ viền trái/phải riêng, dựa vào viền phải của
-       tab trước + viền trái của tab sau là đủ. */
-    .home-tab + .home-tab {
-      border-left: none;
-    }
+    /* TỪNG BỎ border-left ở đây để 2 tab giáp nhau khỏi bị viền đôi dày gấp 2 —
+       nhưng border-left áp cho CẢ chiều cao tab, kể cả đoạn viền CONG ở đỉnh vòm
+       (border-radius), nên xoá mất luôn phần vòm bên trái của tab, tạo vết
+       khuyết góc trên-trái ở tab 2/3. Đường vòm mỗi tab tự cong ra 2 phía nên ở
+       đỉnh vốn không hề chạm nhau (chỉ đoạn thẳng ở đáy mới giáp) — chấp nhận
+       viền hơi dày hơn 1 chút ở đúng đoạn thẳng đó, đổi lại vòm không bị vỡ. */
 
     .home-tab:active,
     .home-tab.btn-pressed {
@@ -555,7 +555,7 @@
       height: 100%;
       object-fit: cover;
       transform-origin: 50% 0%;
-      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+      transform: scale(1.15); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
     }
 
     .icon-btn {
@@ -964,6 +964,42 @@
       box-shadow: 0 5px 0 #8ac926 !important;
     }
 
+    /* Ô 'N' có cổng đầu kề cạnh (không biết chính xác bao nhiêu — chỉ báo "gần
+       đây có cổng") — tô tím MỜ, số bẫy (nếu có) vẫn hiện bình thường ở giữa
+       (xem .num-badge), không có số cổng riêng nào cả — cố ý ĐƠN GIẢN HÓA,
+       không suy luận chính xác được vị trí cổng đầu bằng logic (khác bẫy, vì
+       không gây thua nên không bắt buộc). */
+    .cell.gate-nearby {
+      background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
+      box-shadow: 0 5px 0 #ba68c8 !important;
+    }
+
+    /* ĐÚNG ô cổng đầu vừa dẫm trúng — tô ĐEN hẳn (khác tông tím mờ của
+       .gate-nearby ở trên, cái đó chỉ là ô LÂN CẬN "gần đây có cổng" chứ bản
+       thân không phải cổng) để phân biệt rõ đâu mới là ô cổng THẬT. */
+    .cell.gate-origin-cell {
+      background: linear-gradient(135deg, #3d2c40 0%, #1a1220 100%) !important;
+      box-shadow: 0 5px 0 #0d0810 !important;
+    }
+
+    /* Số trên ô cổng đầu (.gate-origin-cell) — viền trắng để đọc rõ trên nền đen,
+       màu chữ (num-1..num-8) giữ nguyên như bình thường. text-shadow làm dự
+       phòng cho trình duyệt không hỗ trợ -webkit-text-stroke. */
+    .num-badge.num-badge-outlined {
+      -webkit-text-stroke: 2px #ffffff;
+      paint-order: stroke fill;
+      text-shadow:
+        -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff,
+        -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff;
+    }
+
+    /* Cổng đích — lộ diện sẵn từ đầu màn, tông tím ĐẬM để phân biệt "nơi ĐẾN"
+       (luôn biết trước) với ô cổng đầu (đen) và vùng tô tím mờ xung quanh. */
+    .cell.gate-dest-cell {
+      background: linear-gradient(135deg, #e1bee7 0%, #ce93d8 100%) !important;
+      box-shadow: 0 5px 0 #8e24aa !important;
+    }
+
     /* Chấm tròn ĐÚNG màu ô cá — báo ô này giấu đốm màu, người chơi liên tưởng
        ngay "màu này khớp màu cá cần". Góc trên-trái, không đè lên số đếm bẫy. */
     .color-badge {
@@ -1369,6 +1405,21 @@
       pointer-events: none;
     }
 
+    /* Cơ chế "Liên Kết" (thử nghiệm) — TÔ NGUYÊN NỀN Ô bằng màu nhóm (--link-color
+       set bằng JS) khi ô CÒN ẨN — người chơi biết trước "2 ô này cùng phe" nhưng
+       chưa biết cùng phe nào (an toàn hay bẫy), phải tự suy qua các ô số khác. Mở
+       ra rồi (JS không còn gắn class 'link-cell' nữa, xem render()) thì trở lại
+       màu bình thường như mọi ô khác, không giữ tint. Đè trực tiếp lên `background`
+       (không dùng ::after border như trước) vì 2 lý do: (1) dễ nhận diện hơn hẳn
+       theo đúng yêu cầu "nhận diện bằng màu", (2) ::after đã bị "Soi Quanh"
+       (.neighbor-highlight::after) tranh mất — 1 ô chỉ có đúng 1 ::after nên 2 hiệu
+       ứng đè lên nhau, hiệu ứng nào thắng thì cái kia mất hẳn. Đổi sang `background`
+       tránh xung đột này hoàn toàn (khác thuộc tính). */
+    .cell.link-cell.hidden-tile,
+    .cell.link-cell.flagged {
+      background: var(--link-color, #ccc) !important;
+    }
+
     /* Controls */
     .controls {
       margin-top: 20px;
@@ -1696,6 +1747,21 @@
       justify-content: center;
       gap: 6px;
       margin: 12px 0 20px;
+      flex-wrap: wrap;
+    }
+
+    /* Dropdown chọn cơ chế trước khi "Gen Lại Level" (CHỈ DEV, xem dev-regen-row
+       trong Color_Flow_2.0_fixed.html) — ép cơ chế cụ thể (cổng/màu/liên kết) thay
+       vì để random hoàn toàn, tiện test riêng từng cơ chế. */
+    .dev-regen-select {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 2px solid var(--cacao);
+      background: #fff;
+      color: var(--cacao);
     }
 
     /* Hàng "Nhạc nền — sắp có" trong Settings màn Home: nhạt màu, chưa bấm được,
@@ -1838,13 +1904,83 @@
       height: 100%;
       object-fit: cover;
       transform-origin: 50% 0%;
-      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+      transform: scale(1.15); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
     }
 
     .profile-name-field {
       position: relative;
       flex: 1;
       min-width: 0;
+    }
+
+    /* Modal XEM hồ sơ người khác (#profile-view-modal) — bố cục dọc, avatar lớn
+       CANH GIỮA (khác #profile-modal của chính mình đang xếp NGANG avatar+tên vì
+       còn chỗ cho ô tên/lưới chọn) — ở đây chỉ xem, không có gì để bấm ngoài nút
+       đóng, nên dồn hết vào giữa cho gọn gàng. */
+    .profile-view-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-view-avatar-frame {
+      display: block;
+      width: 92px;
+      height: 92px;
+      border-radius: 18px;
+      border: 5px solid #000000;
+      overflow: hidden;
+      background: #ffffff;
+      margin-top: 6px;
+    }
+
+    .profile-view-avatar-img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform-origin: 50% 0%;
+      transform: scale(1.15); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+    }
+
+    .profile-view-name {
+      margin: 0;
+      word-break: break-word;
+    }
+
+    /* Ô hiện level hiện tại của người chơi, đặt cạnh ô tên trong thẻ tóm tắt —
+       lấy ĐÚNG số đang hiện ở màn Home (getNextPlayableLevel()+1 trong script.js,
+       xem openProfileModal()), không phải điểm xếp hạng (completedLevels.size). */
+    .profile-level-badge {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      padding: 6px 12px;
+      border-radius: 14px;
+      border: 3px solid var(--cacao);
+      box-shadow: 0 3px 0 var(--board-shadow);
+      background: #fff8ec;
+    }
+
+    .profile-level-label {
+      font-size: 0.55rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #a8916f;
+      line-height: 1;
+    }
+
+    .profile-level-value {
+      font-family: 'Fredoka', cursive, sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--cacao);
+      line-height: 1.15;
     }
 
     .profile-name-field input {
@@ -1910,9 +2046,11 @@
        vài avatar vẫn nằm gọn bên trái, không tạo khoảng trống lệch lạc như grid
        chia đều cột lúc chưa đủ lấp hàng. Avatar đang chọn viền xanh lá
        (--btn-green) + dấu tick, giống dáng "đang chọn" quen thuộc ở game khác. */
+    /* Grid CỐ ĐỊNH 4 cột (thay vì flex-wrap tự xuống dòng theo bề rộng modal) —
+       luôn đúng 4 avatar/hàng dù modal rộng/hẹp thế nào. */
     .avatar-picker-grid {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
       width: 100%;
       margin-bottom: 16px;
@@ -1920,7 +2058,7 @@
 
     .avatar-pick {
       position: relative;
-      width: 64px;
+      width: 100%;
       background: none;
       border: none;
       padding: 0;
@@ -1930,8 +2068,8 @@
 
     .avatar-pick-frame {
       display: block;
-      width: 64px;
-      height: 64px;
+      width: 100%;
+      aspect-ratio: 1 / 1;
       border-radius: 10px;
       border: 3px solid var(--cacao);
       background: #ffffff;
@@ -1943,7 +2081,7 @@
       height: 100%;
       object-fit: cover;
       transform-origin: 50% 0%;
-      transform: scale(1.33); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
+      transform: scale(1.15); /* xem giải thích ở .leaderboard-avatar-img — chỉ hiện 3/4 phần trên ảnh */
     }
 
     .avatar-pick-selected .avatar-pick-frame {
@@ -2026,6 +2164,18 @@
       100% { opacity: 1; transform: translateY(0); }
     }
 
+    .leaderboard-row-clickable {
+      cursor: pointer;
+    }
+
+    /* .btn-pressed = JS tự toggle qua attachButtonPressFeedback() (script.js) —
+       xem giải thích ở .home-level-display.btn-pressed. */
+    .leaderboard-row-clickable:active,
+    .leaderboard-row-clickable.btn-pressed {
+      transform: translateY(3px);
+      box-shadow: 0 0 0 var(--cell-shadow);
+    }
+
     .leaderboard-row {
       display: flex;
       align-items: center;
@@ -2039,6 +2189,10 @@
       font-weight: 600;
       color: var(--cacao);
       animation: leaderboard-row-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+      /* Thiếu transition thì .btn-pressed (JS toggle) đổi transform/box-shadow
+         SNAP đột ngột (không mượt như .btn-piffle: transition: all 0.1s ease) ->
+         cảm giác lõm/nảy bị tách rời hẳn khỏi lúc modal mở ra 150ms sau đó. */
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
     }
 
     /* Top 3 tô màu huy chương thay vì huy chương chỉ nằm ở icon cho nổi hẳn hàng. */
@@ -2087,9 +2241,10 @@
       object-fit: cover;
       /* Neo (transform-origin) ở mép TRÊN, không phải giữa -> zoom vào chỉ đẩy phần
          ĐÁY ảnh trồi ra ngoài khung (bị overflow:hidden cắt), mép trên đứng yên.
-         scale(1.33) = hiện đúng 3/4 phần trên của ảnh, cắt bỏ 1/4 phần đáy. */
+         scale(1.15) = zoom nhẹ, cắt bớt 1 phần đáy ảnh (tránh lộ thân) mà không
+         phóng to quá mức — trước để 1.33 bị chê "to mắt" quá. */
       transform-origin: 50% 0%;
-      transform: scale(1.33);
+      transform: scale(1.15);
     }
 
     .leaderboard-name {
@@ -2128,6 +2283,18 @@
       margin-bottom: 14px;
     }
 
+    .podium-card-clickable {
+      cursor: pointer;
+    }
+
+    /* .btn-pressed = JS tự toggle qua attachButtonPressFeedback() (script.js) —
+       xem giải thích ở .home-level-display.btn-pressed. */
+    .podium-card-clickable:active,
+    .podium-card-clickable.btn-pressed {
+      transform: translateY(4px);
+      box-shadow: 0 0 0 var(--btn-pink-shadow);
+    }
+
     .podium-card {
       flex: 1;
       min-width: 0;
@@ -2140,6 +2307,8 @@
       color: #ffffff;
       text-align: center;
       font-family: 'Fredoka', cursive, sans-serif;
+      /* Xem giải thích transition ở .leaderboard-row — cùng lý do. */
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
     }
 
     .podium-card-1 {
@@ -2213,7 +2382,7 @@
       /* Xem giải thích ở .leaderboard-avatar-img — neo mép trên rồi zoom(1.33) để chỉ
          hiện đúng 3/4 phần trên của ảnh, cắt bỏ phần đáy. */
       transform-origin: 50% 0%;
-      transform: scale(1.33);
+      transform: scale(1.15);
     }
 
     .podium-card-1 .podium-avatar {
