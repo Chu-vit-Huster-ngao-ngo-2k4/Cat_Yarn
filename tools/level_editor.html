@@ -85,6 +85,7 @@
   .mode-btn.mode-color2.active { border-color: var(--blue); background: #17303f; }
   .mode-btn.mode-gate.active { border-color: #8e24aa; background: #2a1730; }
   .mode-btn.mode-dest.active { border-color: #ce93d8; background: #2a1730; }
+  .mode-btn.mode-slide.active { border-color: #0288d1; background: #0d2733; }
 
   .action-btn.check { background: var(--teal); }
   .action-btn.reset { background: var(--red); }
@@ -121,6 +122,7 @@
   .cell.is-color2 { background: var(--blue); color: #eaf4fb; }
   .cell.is-gate { background: #1a1220; color: #ce93d8; border: 2px solid #4a148c; }
   .cell.is-dest { background: #7b1fa2; color: #f3e5f5; }
+  .cell.is-slide { background: linear-gradient(135deg, #b3e5fc 0%, #4fc3f7 100%); color: #01579b; }
   .cell.count-0 { color: var(--line); }
   .cell.stuck::after {
     content: '';
@@ -216,6 +218,10 @@
           <button class="mode-btn mode-color2" data-mode="color2">🎨 Màu 2</button>
           <button class="mode-btn mode-gate" data-mode="gate">🌀 Cổng Đầu</button>
           <button class="mode-btn mode-dest" data-mode="dest">🎯 Cổng Đích</button>
+          <button class="mode-btn mode-slide" data-mode="slideUp">🧊↑ Trượt Lên</button>
+          <button class="mode-btn mode-slide" data-mode="slideDown">🧊↓ Trượt Xuống</button>
+          <button class="mode-btn mode-slide" data-mode="slideLeft">🧊← Trượt Trái</button>
+          <button class="mode-btn mode-slide" data-mode="slideRight">🧊→ Trượt Phải</button>
           <button class="mode-btn" data-mode="erase">⬜ Xoá</button>
         </div>
         <div class="status-line" id="mode-status">Chế độ: bấm ô để cắm/gỡ bẫy.</div>
@@ -239,6 +245,7 @@
           <div><span class="swatch" style="background:#1982c4"></span>Ô giấu Màu 2 (D) — có đủ cả C+D thì mèo/cá tách nửa mỗi màu</div>
           <div><span class="swatch" style="background:#1a1220; border:1px solid #4a148c"></span>Cổng đầu (G) — nhiều ô/màn, ẩn, dẫm trúng KHÔNG thua, bị hút sang Cổng đích. KHÔNG cần suy luận được (không tính vào "ô còn kẹt")</div>
           <div><span class="swatch" style="background:#7b1fa2"></span>Cổng đích (P) — đúng 1 ô/màn, luôn lộ diện sẵn như Xuất Phát/Đích. Có G thì bắt buộc có đúng 1 P và ngược lại</div>
+          <div><span class="swatch" style="background:linear-gradient(135deg,#b3e5fc,#4fc3f7)"></span>Ô trượt (^v&lt;&gt;) — nhiều ô/màn, luôn lộ diện sẵn như S/E/P, dẫm vào bị đẩy tiếp đúng 1 ô theo hướng mũi tên. KHÔNG cần suy luận được (không tính vào "ô còn kẹt")</div>
           <div><span class="swatch" style="border:2px dashed #ffca3a"></span>Ô còn kẹt (cần đoán mò)</div>
           <div><span class="swatch" style="border:2px solid #ff5964"></span>Bẫy sát Start (vi phạm luật)</div>
         </div>
@@ -369,6 +376,13 @@ function checkSolvable(cells, rows, cols) {
   revealed[idx2(sPos.r, sPos.c, cols)] = true;
   // Cổng đích (nếu có) luôn lộ diện sẵn từ đầu màn, giống S/E.
   if (pPos) revealed[idx2(pPos.r, pPos.c, cols)] = true;
+  // Ô trượt cũng luôn lộ diện sẵn từ đầu màn, giống P — không phải ô cần suy luận.
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const tt = cells[idx2(r, c, cols)];
+      if (tt >= 8 && tt <= 11) revealed[idx2(r, c, cols)] = true;
+    }
+  }
 
   // Cổng đầu (G) KHÔNG cần suy luận được bằng logic (khác bẫy, không gây thua) —
   // chỉ bẫy mới bắt buộc né được ở nước đi đầu tiên, xem CLAUDE.md.
@@ -575,6 +589,10 @@ function render() {
       else if (t === 5) { el.classList.add('is-color2'); el.textContent = '🎨'; }
       else if (t === 6) { el.classList.add('is-gate'); el.textContent = '🌀'; }
       else if (t === 7) { el.classList.add('is-dest'); el.textContent = '🎯'; }
+      else if (t >= 8 && t <= 11) {
+        el.classList.add('is-slide');
+        el.textContent = { 8: '↑', 9: '↓', 10: '←', 11: '→' }[t];
+      }
       else {
         const n = counts[idx(r, c)];
         el.textContent = n > 0 ? n : '';
@@ -596,10 +614,13 @@ function handleCellClick(r, c) {
   const mode = state.mode;
   const status = document.getElementById('mode-status');
 
+  const isSlideType = (x) => x >= 8 && x <= 11;
+
   if (mode === 'trap') {
     if (t === 2 || t === 3) { status.textContent = 'Không thể đặt bẫy lên ô Xuất Phát / Đích.'; return; }
     if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt bẫy vào đây.'; return; }
     if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn đặt bẫy vào đây.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn đặt bẫy vào đây.'; return; }
     state.cells[i] = t === 1 ? 0 : 1;
   } else if (mode === 'erase') {
     if (t === 2 || t === 3) { status.textContent = 'Dùng nút Xuất Phát/Đích ở ô khác để dời, không xoá trực tiếp.'; return; }
@@ -608,6 +629,7 @@ function handleCellClick(r, c) {
     if (t === 3) { status.textContent = 'Ô này đang là Đích, không thể đặt Xuất Phát đè lên.'; return; }
     if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt Xuất Phát vào đây.'; return; }
     if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn đặt Xuất Phát vào đây.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn đặt Xuất Phát vào đây.'; return; }
     const old = findSpecial(state.cells, state.rows, state.cols, 2);
     if (old) state.cells[idx(old.r, old.c)] = 0;
     state.cells[i] = 2;
@@ -615,6 +637,7 @@ function handleCellClick(r, c) {
     if (t === 2) { status.textContent = 'Ô này đang là Xuất Phát, không thể đặt Đích đè lên.'; return; }
     if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt Đích vào đây.'; return; }
     if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn đặt Đích vào đây.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn đặt Đích vào đây.'; return; }
     const old = findSpecial(state.cells, state.rows, state.cols, 3);
     if (old) state.cells[idx(old.r, old.c)] = 0;
     state.cells[i] = 3;
@@ -623,21 +646,31 @@ function handleCellClick(r, c) {
     if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt cổng đầu vào đây.'; return; }
     if (t === 7) { status.textContent = 'Ô này đang là Cổng đích, không thể đặt cổng đầu đè lên.'; return; }
     if (t === 1) { status.textContent = 'Không thể đặt cổng đầu lên ô bẫy.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn đặt cổng đầu vào đây.'; return; }
     state.cells[i] = t === 6 ? 0 : 6; // bấm lại đúng ô cổng đầu -> gỡ (cho phép NHIỀU cổng đầu/màn, không dời như S/E/P)
   } else if (mode === 'dest') {
     if (t === 2 || t === 3) { status.textContent = 'Không thể đặt Cổng đích lên ô Xuất Phát / Đích.'; return; }
     if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt Cổng đích vào đây.'; return; }
     if (t === 6) { status.textContent = 'Ô này đang là cổng đầu, không thể đặt Cổng đích đè lên.'; return; }
     if (t === 1) { status.textContent = 'Không thể đặt Cổng đích lên ô bẫy.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn đặt Cổng đích vào đây.'; return; }
     // Chỉ đúng 1 ô Cổng đích/màn (như S/E) -> bấm ô mới thì dời từ ô cũ.
     const old = findSpecial(state.cells, state.rows, state.cols, 7);
     if (old) state.cells[idx(old.r, old.c)] = 0;
     state.cells[i] = 7;
+  } else if (mode === 'slideUp' || mode === 'slideDown' || mode === 'slideLeft' || mode === 'slideRight') {
+    if (t === 2 || t === 3) { status.textContent = 'Không thể đặt ô trượt lên ô Xuất Phát / Đích.'; return; }
+    if (t === 4 || t === 5) { status.textContent = 'Ô này đang giấu màu, chuyển chế độ "Xoá" trước nếu muốn đặt ô trượt vào đây.'; return; }
+    if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn đặt ô trượt vào đây.'; return; }
+    if (t === 1) { status.textContent = 'Không thể đặt ô trượt lên ô bẫy.'; return; }
+    const slideType = { slideUp: 8, slideDown: 9, slideLeft: 10, slideRight: 11 }[mode];
+    state.cells[i] = t === slideType ? 0 : slideType; // bấm lại đúng hướng đang có -> gỡ; khác hướng -> đổi hướng luôn
   } else if (mode === 'color') {
     if (t === 2 || t === 3) { status.textContent = 'Không thể giấu màu lên ô Xuất Phát / Đích.'; return; }
     if (t === 1) { status.textContent = 'Không thể giấu màu lên ô bẫy.'; return; }
     if (t === 5) { status.textContent = 'Ô này đang giấu Màu 2, chuyển chế độ "Xoá" trước nếu muốn đổi thành Màu 1.'; return; }
     if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn giấu màu vào đây.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn giấu màu vào đây.'; return; }
     if (t === 4) { state.cells[i] = 0; } // bấm lại đúng ô đang giấu màu 1 -> bỏ giấu
     else {
       // Chỉ giấu tối đa 1 ô Màu 1/màn, giống hệt game thật — bấm ô mới thì dời từ ô cũ.
@@ -649,6 +682,7 @@ function handleCellClick(r, c) {
     if (t === 2 || t === 3) { status.textContent = 'Không thể giấu màu lên ô Xuất Phát / Đích.'; return; }
     if (t === 1) { status.textContent = 'Không thể giấu màu lên ô bẫy.'; return; }
     if (t === 6 || t === 7) { status.textContent = 'Ô này đang là cổng, chuyển chế độ "Xoá" trước nếu muốn giấu màu vào đây.'; return; }
+    if (isSlideType(t)) { status.textContent = 'Ô này đang là ô trượt, chuyển chế độ "Xoá" trước nếu muốn giấu màu vào đây.'; return; }
     if (t === 4) { status.textContent = 'Ô này đang giấu Màu 1, chuyển chế độ "Xoá" trước nếu muốn đổi thành Màu 2.'; return; }
     if (t === 5) { state.cells[i] = 0; } // bấm lại đúng ô đang giấu màu 2 -> bỏ giấu
     else {
@@ -792,7 +826,7 @@ document.getElementById('btn-generate').addEventListener('click', () => {
     lastResult = checkSolvable(state.cells, state.rows, state.cols);
     showReport(lastResult);
     render();
-    status.textContent = `✅ Đã sinh xong sau ${result.attempts} lần thử — nhớ đặt lại ô Màu 1/Màu 2 (C/D) và Cổng Đầu/Cổng Đích (G/P) nếu cần, sinh bẫy mới sẽ xoá hết các ô đó.`;
+    status.textContent = `✅ Đã sinh xong sau ${result.attempts} lần thử — nhớ đặt lại ô Màu 1/Màu 2 (C/D), Cổng Đầu/Cổng Đích (G/P) và Ô Trượt nếu cần, sinh bẫy mới sẽ xoá hết các ô đó.`;
   }, 10);
 });
 
@@ -807,6 +841,10 @@ const modeLabels = {
   color2: 'Bấm 1 ô an toàn để giấu Màu 2 (tối đa 1 ô/màn, dời khỏi vị trí cũ). Bấm lại đúng ô đó để bỏ giấu. Có cả Màu 1 lẫn Màu 2 -> mèo/cá tách nửa mỗi màu.',
   gate: 'Bấm ô để cắm/gỡ Cổng Đầu (G) — được NHIỀU ô/màn, ẩn, dẫm trúng không thua, chỉ bị hút sang Cổng Đích. Phải có đúng 1 Cổng Đích mới hợp lệ.',
   dest: 'Bấm 1 ô để đặt làm Cổng Đích (P, dời khỏi vị trí cũ) — luôn lộ diện sẵn như Xuất Phát/Đích. Phải có ít nhất 1 Cổng Đầu mới hợp lệ.',
+  slideUp: 'Bấm ô để cắm/gỡ Ô Trượt hướng LÊN — được NHIỀU ô/màn, luôn lộ diện sẵn như Xuất Phát/Đích/Cổng Đích, dẫm vào sẽ bị đẩy tiếp đúng 1 ô theo hướng mũi tên (không dây chuyền dù ô muốn tới cũng là ô trượt khác).',
+  slideDown: 'Bấm ô để cắm/gỡ Ô Trượt hướng XUỐNG — giống hướng Lên, chỉ khác chiều đẩy.',
+  slideLeft: 'Bấm ô để cắm/gỡ Ô Trượt hướng TRÁI — giống hướng Lên, chỉ khác chiều đẩy.',
+  slideRight: 'Bấm ô để cắm/gỡ Ô Trượt hướng PHẢI — giống hướng Lên, chỉ khác chiều đẩy.',
   erase: 'Bấm ô để xoá về ô trống.',
 };
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -838,7 +876,8 @@ function cellsToRows() {
     let line = '';
     for (let c = 0; c < state.cols; c++) {
       const t = state.cells[idx(r, c)];
-      line += t === 2 ? 'S' : t === 3 ? 'E' : t === 1 ? '#' : t === 4 ? 'C' : t === 5 ? 'D' : t === 6 ? 'G' : t === 7 ? 'P' : '.';
+      line += t === 2 ? 'S' : t === 3 ? 'E' : t === 1 ? '#' : t === 4 ? 'C' : t === 5 ? 'D' : t === 6 ? 'G' : t === 7 ? 'P' :
+        t === 8 ? '^' : t === 9 ? 'v' : t === 10 ? '<' : t === 11 ? '>' : '.';
     }
     rows.push(line);
   }
@@ -899,7 +938,7 @@ document.getElementById('file-input').addEventListener('change', (e) => {
       const cols = data[0].length;
       for (const row of data) {
         if (row.length !== cols) throw new Error('Các dòng không đều nhau về độ dài.');
-        for (const ch of row) if (!'SE#CDGP.'.includes(ch)) throw new Error(`Ký tự không hợp lệ '${ch}'.`);
+        for (const ch of row) if (!'SE#CDGP^v<>.'.includes(ch)) throw new Error(`Ký tự không hợp lệ '${ch}'.`);
       }
       const sCount = data.join('').split('').filter(ch => ch === 'S').length;
       const eCount = data.join('').split('').filter(ch => ch === 'E').length;
@@ -919,7 +958,8 @@ document.getElementById('file-input').addEventListener('change', (e) => {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const ch = data[r][c];
-          cells[r * cols + c] = ch === 'S' ? 2 : ch === 'E' ? 3 : ch === '#' ? 1 : ch === 'C' ? 4 : ch === 'D' ? 5 : ch === 'G' ? 6 : ch === 'P' ? 7 : 0;
+          cells[r * cols + c] = ch === 'S' ? 2 : ch === 'E' ? 3 : ch === '#' ? 1 : ch === 'C' ? 4 : ch === 'D' ? 5 : ch === 'G' ? 6 : ch === 'P' ? 7 :
+            ch === '^' ? 8 : ch === 'v' ? 9 : ch === '<' ? 10 : ch === '>' ? 11 : 0;
         }
       }
 

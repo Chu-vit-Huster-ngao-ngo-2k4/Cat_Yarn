@@ -49,7 +49,7 @@ import os
 import json
 import argparse
 
-ALLOWED_CHARS = set('SE#.CDGPabcd1234wxyz')
+ALLOWED_CHARS = set('SE#.CDGPabcd1234wxyz^v<>')
 DIRS_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 DIRS_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
@@ -130,6 +130,10 @@ def build_grid(rows, rows_count, width):
                 t = 'G'
             elif ch == 'P':
                 t = 'P'
+            elif ch in '^v<>':
+                # O truot - luon lo dien san tu dau man nhu S/E/P (xem simulate()),
+                # khong tinh vao count/count2 vi khong phai bay/cong dau.
+                t = 'W'
             elif ch in 'abcd':
                 t = 'B'
                 link_group = ch
@@ -269,10 +273,10 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     """
     revealed = [[False] * width for _ in range(rows_count)]
     revealed[s_pos[0]][s_pos[1]] = True
-    # Cong dich (neu co) luon lo dien san tu dau man, giong S/E.
+    # Cong dich (P) va o truot (W) luon lo dien san tu dau man, giong S/E.
     for r in range(rows_count):
         for c in range(width):
-            if grid[r][c]['type'] == 'P':
+            if grid[r][c]['type'] in ('P', 'W'):
                 revealed[r][c] = True
 
     first_move_bad = []
@@ -356,6 +360,9 @@ def check_rows(rows, name):
     link_chars_used = sorted(set(ch for row in rows for ch in row if ch in 'abcd1234wxyz'))
     if link_chars_used:
         extra += f"  |  Nhom lien ket: {', '.join(link_chars_used)}"
+    slide_count = sum(row.count(ch) for row in rows for ch in '^v<>')
+    if slide_count:
+        extra += f"  |  O truot: {slide_count}"
     print(f"  Kich thuoc: {rows_count}x{width}  |  Start={cell_label(s_pos)}  Dia ca={cell_label(e_pos)}{extra}")
 
     if result['first_move_bad']:

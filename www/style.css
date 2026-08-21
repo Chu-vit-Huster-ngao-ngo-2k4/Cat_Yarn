@@ -473,6 +473,23 @@
       width: 100%;
     }
 
+    /* CHỈ DEV — xem ghi chú trong Color_Flow_2.0_fixed.html/DEV_LEVEL_TOOLS. */
+    .dev-level-nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 6px 0 0;
+      width: 100%;
+    }
+
+    .dev-level-nav-row .btn-piffle {
+      flex: 1;
+      font-size: 0.8rem;
+      padding: 7px 8px;
+      justify-content: center;
+    }
+
     /* Hàng trái tim (3 mạng/màn) — mỗi trái tim 1 span, đổi giữa 2 trạng thái còn/mất
        bằng class .lost thay vì animate trực tiếp. */
     .lives-display {
@@ -998,6 +1015,14 @@
     .cell.gate-dest-cell {
       background: linear-gradient(135deg, #e1bee7 0%, #ce93d8 100%) !important;
       box-shadow: 0 5px 0 #8e24aa !important;
+    }
+
+    /* Ô trượt — lộ diện sẵn từ đầu màn như S/E/P, tông XANH DƯƠNG (khác hẳn tím
+       của cổng, đen của bẫy) để không lẫn với các cơ chế khác — mũi tên trong
+       contentHTML (xem render()) chỉ đúng hướng mèo sẽ bị đẩy tiếp 1 ô. */
+    .cell.slide-cell {
+      background: linear-gradient(135deg, #b3e5fc 0%, #4fc3f7 100%) !important;
+      box-shadow: 0 5px 0 #0288d1 !important;
     }
 
     /* Chấm tròn ĐÚNG màu ô cá — báo ô này giấu đốm màu, người chơi liên tưởng

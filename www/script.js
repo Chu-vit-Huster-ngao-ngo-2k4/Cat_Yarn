@@ -888,6 +888,7 @@ let currentLevelIdx = 0;
 let GRID_ROWS = 5, GRID_COLS = 5;
 let grid, playerPos, isGameOver = false;
 let gateDestPos = null; // vị trí "cổng đích" (ô 'P') nếu màn có cơ chế cổng dịch chuyển — xem loadLevel()/revealAndMove()
+let levelHasSlide = false; // màn có ít nhất 1 ô trượt (loại 'W') hay không — xem loadLevel()/maybeShowSlideTutorial()
 let linkGroups = {}; // nhóm ô LIÊN KẾT (nếu màn có cơ chế này) — {'a': [{r,c},...], ...}, xem loadLevel()/deduceLayer()
 let linkGroupColor = {}; // màu viền hiện trên bàn cờ cho từng nhóm liên kết — xem loadLevel()/render()
 // true trong khoảng chờ ngắn giữa lúc dẫm trúng cổng đầu và lúc mèo thật sự bật
@@ -895,6 +896,10 @@ let linkGroupColor = {}; // màu viền hiện trên bàn cờ cho từng nhóm 
 // playerPos có thể bị 1 nước đi khác ghi đè trước khi setTimeout kịp chạy, khiến
 // mèo "dịch chuyển nhầm" về vị trí cổng đích dù đã đi chỗ khác.
 let isTeleporting = false;
+// true trong khoảng chờ ngắn giữa lúc mèo VỪA BƯỚC vào ô trượt (loại 'W') và lúc
+// nó thật sự bị đẩy tiếp 1 ô theo hướng mũi tên (xem triggerSlide()) — chặn input
+// xen ngang, cùng lý do với isTeleporting ở trên.
+let isSliding = false;
 let catEl = null;
 let pendingReveals = []; // ô vừa lộ diện trong nước đi này, dùng để bung có thứ tự (loang)
 let pendingCelebratePop = false; // true khi đang bung kiểu ăn mừng (thắng) — mạnh/nảy hơn bung thường
@@ -1620,6 +1625,71 @@ function genPlaceGates(rows, size, bombs, sPos) {
     return grid2.map(row => row.join(''));
 }
 
+const GEN_SLIDE_CHANCE = 0.3;
+const GEN_SLIDE_MIN = 1, GEN_SLIDE_MAX = 3;
+const GEN_SLIDE_RISKY_CHANCE = 0.8; // xác suất ưu tiên hướng đẩy thẳng vào bẫy khi có sẵn hướng đó
+const GEN_SLIDE_DIRS = [
+    { dr: -1, dc: 0, ch: '^' },
+    { dr: 1, dc: 0, ch: 'v' },
+    { dr: 0, dc: -1, ch: '<' },
+    { dr: 0, dc: 1, ch: '>' },
+];
+
+// Đặt GEN_SLIDE_MIN-GEN_SLIDE_MAX ô trượt lên các ô trống còn lại (chưa bị cổng/
+// liên kết chiếm) — ưu tiên MẠNH (GEN_SLIDE_RISKY_CHANCE) chọn hướng đẩy THẲNG
+// VÀO 1 BẪY (nếu ô đó có hướng nào trỏ tới bẫy) để tạo rủi ro thật ("phải tính
+// toán trước khi bước vào ô trượt"), còn lại (không có hướng nào trỏ tới bẫy)
+// mới đành dùng hướng AN TOÀN.
+// KHÔNG cần đảm bảo suy luận được (giống cổng/màu) vì bản thân ô trượt luôn lộ
+// diện sẵn, không phải ô cần đoán.
+function genPlaceSlide(rows, size, bombs, sPos) {
+    const sKey = `${sPos[0]},${sPos[1]}`;
+    const eKey = `${size - 1},${size - 1}`;
+    const reachable = genReachableCells(bombs, size, sPos);
+    const candidates = [];
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            const key = `${r},${c}`;
+            if (key === sKey || key === eKey || bombs.has(key)) continue;
+            if (rows[r][c] !== '.') continue; // đã bị cổng/liên kết chiếm mất
+            if (!reachable.has(key)) continue;
+            candidates.push([r, c]);
+        }
+    }
+    if (candidates.length === 0) return rows;
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    const grid2 = rows.map(row => row.split(''));
+    const nSlides = Math.min(candidates.length, GEN_SLIDE_MIN + Math.floor(Math.random() * (GEN_SLIDE_MAX - GEN_SLIDE_MIN + 1)));
+    let placed = 0;
+    for (const [r, c] of candidates) {
+        if (placed >= nSlides) break;
+        const dirs = GEN_SLIDE_DIRS.slice();
+        for (let i = dirs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+        }
+        let riskyDir = null, safeDir = null;
+        for (const d of dirs) {
+            const nr = r + d.dr, nc = c + d.dc;
+            if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+            if (nr === sPos[0] && nc === sPos[1]) continue; // không đẩy ngược về Start
+            const destCh = grid2[nr][nc];
+            if (destCh === '#') { if (!riskyDir) riskyDir = d; }
+            else if (destCh === '.') { if (!safeDir) safeDir = d; }
+            // Đích đã là G/P/W/liên kết/màu khác thì bỏ qua hướng này (chưa test phối hợp).
+        }
+        const chosen = (riskyDir && Math.random() < GEN_SLIDE_RISKY_CHANCE) ? riskyDir : (safeDir || riskyDir);
+        if (!chosen) continue; // ô này không có hướng nào hợp lệ -> bỏ qua, giữ nguyên là ô trống
+        grid2[r][c] = chosen.ch;
+        placed++;
+    }
+    return grid2.map(row => row.join(''));
+}
+
 // Đặt 1 (hoặc 2) đốm màu lên ô thường bất kỳ không phải bẫy/S/E — giống hệt quy
 // ước của level tĩnh: KHÔNG cần đảm bảo suy luận tới được, chỉ cần không phải bẫy.
 // Tập hợp mọi ô mèo THẬT SỰ đi tới được từ Start — chỉ đi qua ô KHÔNG PHẢI bẫy,
@@ -1785,8 +1855,9 @@ function genGuaranteedFallback(size) {
 // forceMechanic (CHỈ DEV — xem devRegenerateCurrentLevel()): undefined/null = random
 // bình thường (xác suất mặc định cho từng cơ chế, độc lập nhau, có thể ra 0/nhiều
 // cơ chế cùng lúc như trước giờ); 'none' = ép KHÔNG cơ chế nào (chỉ bẫy thường);
-// 'gate'/'color'/'link' = ép CHẮC CHẮN có đúng cơ chế đó, tắt hẳn 2 cơ chế còn lại
-// — tiện dev test riêng từng cơ chế mà không phải random nhiều lần mới trúng.
+// 'gate'/'color'/'link'/'slide' = ép CHẮC CHẮN có đúng cơ chế đó, tắt hẳn các cơ
+// chế còn lại — tiện dev test riêng từng cơ chế mà không phải random nhiều lần
+// mới trúng.
 function generateProceduralLevel(forceMechanic) {
     const size = GEN_MIN_SIZE + Math.floor(Math.random() * (GEN_MAX_SIZE - GEN_MIN_SIZE + 1));
     let density = GEN_DENSITY_BY_SIZE[size] || 0.30;
@@ -1805,15 +1876,19 @@ function generateProceduralLevel(forceMechanic) {
     const gateChance = forceMechanic ? (forceMechanic === 'gate' ? 1 : 0) : GEN_GATE_CHANCE;
     const colorChance = forceMechanic ? (forceMechanic === 'color' ? 1 : 0) : 0.75;
     const linkChance = forceMechanic ? (forceMechanic === 'link' ? 1 : 0) : GEN_LINK_CHANCE;
+    const slideChance = forceMechanic ? (forceMechanic === 'slide' ? 1 : 0) : GEN_SLIDE_CHANCE;
 
     let rows = result.rows;
-    // Đặt cổng dịch chuyển và liên kết TRƯỚC màu (genPlaceColor bên dưới tự né ô
-    // đã bị chiếm qua kiểm tra rows[r][c] !== '.').
+    // Đặt cổng dịch chuyển, liên kết, ô trượt TRƯỚC màu (genPlaceColor bên dưới tự
+    // né ô đã bị chiếm qua kiểm tra rows[r][c] !== '.').
     if (Math.random() < gateChance) {
         rows = genPlaceGates(rows, result.size, result.bombs, [0, 0]);
     }
     if (Math.random() < linkChance) {
         rows = genPlaceLinkGroup(rows, result.size, result.bombs);
+    }
+    if (Math.random() < slideChance) {
+        rows = genPlaceSlide(rows, result.size, result.bombs, [0, 0]);
     }
     // Tăng xác suất có màu: ~1/2 -> ~3/4 level sinh ra có màu, trong đó ~40% là 2 màu.
     if (Math.random() < colorChance) {
@@ -1862,6 +1937,22 @@ function devRegenerateCurrentLevel() {
     LEVELS[currentLevelIdx] = generateProceduralLevel(forceMechanic);
     hideSettings();
     loadLevel(currentLevelIdx);
+}
+
+// CHỈ DEV — nhảy thẳng qua/lại 1 level, BỎ QUA điều kiện thắng (không cần dẫn mèo
+// tới cá), tiện lướt nhanh nhiều level lúc test cơ chế mới. Dùng loadLevel() y hệt
+// lối vào bình thường (không phải "cheat nhảy level" riêng — currentLevelIdx +-1
+// đơn giản hơn hẳn vì không cần đọc số từ ô nhập tay). SẼ BỊ BỎ trước khi phát
+// hành (xem ghi chú DEV_LEVEL_TOOLS/nút trong Color_Flow_2.0_fixed.html).
+function devPrevLevel() {
+    if (!DEV_LEVEL_TOOLS || currentLevelIdx <= 0) return;
+    loadLevel(currentLevelIdx - 1);
+}
+
+function devNextLevel() {
+    if (!DEV_LEVEL_TOOLS) return;
+    ensureLevelGenerated(currentLevelIdx + 1); // đề phòng lỡ đang ở level tĩnh CUỐI CÙNG, phải tự sinh thêm mới có level kế tiếp để nhảy tới
+    loadLevel(currentLevelIdx + 1);
 }
 
 // Ô đang được Gợi Ý trỏ tới (nếu có) — vòng tròn CHỈ biến mất khi mèo thật sự bước
@@ -2159,6 +2250,7 @@ function loadLevel(idx, tryResume) {
     GRID_COLS = rows[0].length;
     grid = [];
     gateDestPos = null; // vị trí "cổng đích" (nếu màn có cơ chế cổng dịch chuyển) — xem revealAndMove()
+    levelHasSlide = false; // đặt lại mỗi màn, bật true bên dưới nếu gặp ô 'W'
     linkGroups = {}; // nhóm ô LIÊN KẾT (nếu màn có cơ chế này) -> {'a': [{r,c},...], '1': [...]}, xem deduceLayer()
     linkGroupColor = {}; // gán màu viền cho từng nhóm, tính lại mỗi màn — xem render()
     const linkGroupOrder = []; // thứ tự nhóm XUẤT HIỆN trên bàn cờ (quét trái->phải, trên->dưới) — KHÔNG dùng Object.keys(linkGroups) vì JS tự sắp key kiểu số ('1'..'4') lên trước key chữ ('a'..'d') bất kể thứ tự thêm vào, sẽ vô tình khiến nhóm "an toàn" luôn nhận màu sớm hơn nhóm "bẫy" qua nhiều màn — lộ thông tin không mong muốn.
@@ -2169,11 +2261,19 @@ function loadLevel(idx, tryResume) {
             const ch = rows[r][c];
             let type = 'N';
             let linkGroup = null;
+            let slideDir = null;
             if (ch === 'S') type = 'S';
             else if (ch === 'E') type = 'E';
             else if (ch === '#') type = 'B';
             else if (ch === 'G') type = 'G'; // cổng đầu (ẩn, không gây thua — dẫm vào sẽ bị hút sang cổng đích)
             else if (ch === 'P') type = 'P'; // cổng đích (lộ diện sẵn từ đầu màn, như S/E)
+            // Ô trượt — LUÔN lộ diện sẵn từ đầu màn (như S/E/P, không phải ô cần suy
+            // luận), dẫm vào sẽ bị đẩy tiếp ĐÚNG 1 ô theo hướng mũi tên (xem
+            // triggerSlide()) — không dây chuyền dù ô muôn tới cũng là ô trượt khác.
+            else if (ch === '^') { type = 'W'; slideDir = { dr: -1, dc: 0 }; }
+            else if (ch === 'v') { type = 'W'; slideDir = { dr: 1, dc: 0 }; }
+            else if (ch === '<') { type = 'W'; slideDir = { dr: 0, dc: -1 }; }
+            else if (ch === '>') { type = 'W'; slideDir = { dr: 0, dc: 1 }; }
             else if (ch >= 'a' && ch <= 'd') { type = 'B'; linkGroup = ch; } // bẫy LIÊN KẾT (nhóm a-d) — vẫn là bẫy bình thường (tính vào số đếm/gây thua), chỉ thêm cờ nhóm
             // 'w'-'z' = cổng đầu LIÊN KẾT — CÙNG nhóm với chữ cái a-d tương ứng (w↔a,
             // x↔b, y↔c, z↔d), nhưng bản thân ô này là CỔNG chứ không phải bẫy. Nhóm
@@ -2186,9 +2286,10 @@ function loadLevel(idx, tryResume) {
             // thường (N), chỉ thêm cờ, không đổi cách tính số bẫy lân cận.
             const hasColor = (ch === 'C');
             const hasColor2 = (ch === 'D');
-            grid[r].push({ type, count: 0, count2: 0, revealed: false, flagged: false, hasColor, hasColor2, linkGroup });
+            grid[r].push({ type, count: 0, count2: 0, revealed: false, flagged: false, hasColor, hasColor2, linkGroup, slideDir });
             if (type === 'S') playerPos = { r, c };
             if (type === 'P') gateDestPos = { r, c };
+            if (type === 'W') levelHasSlide = true;
             if (linkGroup) {
                 if (!linkGroups[linkGroup]) { linkGroups[linkGroup] = []; linkGroupOrder.push(linkGroup); }
                 linkGroups[linkGroup].push({ r, c });
@@ -2239,7 +2340,7 @@ function loadLevel(idx, tryResume) {
     // Ô xuất phát, đĩa cá và cổng đích luôn lộ diện làm mốc, chỉ đường đi ở giữa là ẩn
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
-            if (grid[r][c].type === 'S' || grid[r][c].type === 'E' || grid[r][c].type === 'P') grid[r][c].revealed = true;
+            if (grid[r][c].type === 'S' || grid[r][c].type === 'E' || grid[r][c].type === 'P' || grid[r][c].type === 'W') grid[r][c].revealed = true;
         }
     }
 
@@ -2336,6 +2437,9 @@ function loadLevel(idx, tryResume) {
     // hình ngay khi vừa dựng xong bàn cờ mới, không chỉ lúc mở màn Game lần đầu.
     fitBoardToSpace();
     maybeShowColorTutorial();
+    maybeShowGateTutorial();
+    maybeShowLinkTutorial();
+    maybeShowSlideTutorial();
     hideStartSafeHint(); // dọn tàn dư từ màn trước, tránh dính sang màn không cần
     hideNeighborBtnHint();
     if (currentLevelIdx === 1) {
@@ -2553,6 +2657,70 @@ function hideColorTutorial() {
 
 document.getElementById('color-tutorial-modal').addEventListener('click', (e) => {
     if (e.target.id === 'color-tutorial-modal') hideColorTutorial();
+});
+
+// Popup giới thiệu cơ chế "cổng dịch chuyển" — chỉ hiện đúng 1 lần, đúng lúc vào
+// màn ĐẦU TIÊN có cơ chế này (gateDestPos khác null nghĩa là màn có ít nhất 1
+// cổng đầu + đúng 1 cổng đích, xem loadLevel()).
+const GATE_TUTORIAL_SEEN_KEY = 'catYarnGateTutorialSeen';
+
+function maybeShowGateTutorial() {
+    if (!gateDestPos) return;
+    let hasSeen = false;
+    try { hasSeen = localStorage.getItem(GATE_TUTORIAL_SEEN_KEY) === '1'; } catch (e) { /* bỏ qua */ }
+    if (hasSeen) return;
+    document.getElementById('gate-tutorial-modal').classList.add('show');
+}
+
+function hideGateTutorial() {
+    document.getElementById('gate-tutorial-modal').classList.remove('show');
+    try { localStorage.setItem(GATE_TUTORIAL_SEEN_KEY, '1'); } catch (e) { /* bỏ qua */ }
+}
+
+document.getElementById('gate-tutorial-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'gate-tutorial-modal') hideGateTutorial();
+});
+
+// Popup giới thiệu cơ chế "liên kết" — chỉ hiện đúng 1 lần, đúng lúc vào màn ĐẦU
+// TIÊN có ít nhất 1 nhóm liên kết (linkGroups khác rỗng, xem loadLevel()).
+const LINK_TUTORIAL_SEEN_KEY = 'catYarnLinkTutorialSeen';
+
+function maybeShowLinkTutorial() {
+    if (Object.keys(linkGroups).length === 0) return;
+    let hasSeen = false;
+    try { hasSeen = localStorage.getItem(LINK_TUTORIAL_SEEN_KEY) === '1'; } catch (e) { /* bỏ qua */ }
+    if (hasSeen) return;
+    document.getElementById('link-tutorial-modal').classList.add('show');
+}
+
+function hideLinkTutorial() {
+    document.getElementById('link-tutorial-modal').classList.remove('show');
+    try { localStorage.setItem(LINK_TUTORIAL_SEEN_KEY, '1'); } catch (e) { /* bỏ qua */ }
+}
+
+document.getElementById('link-tutorial-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'link-tutorial-modal') hideLinkTutorial();
+});
+
+// Popup giới thiệu cơ chế "ô trượt" — chỉ hiện đúng 1 lần, đúng lúc vào màn ĐẦU
+// TIÊN có ít nhất 1 ô trượt (levelHasSlide, xem loadLevel()).
+const SLIDE_TUTORIAL_SEEN_KEY = 'catYarnSlideTutorialSeen';
+
+function maybeShowSlideTutorial() {
+    if (!levelHasSlide) return;
+    let hasSeen = false;
+    try { hasSeen = localStorage.getItem(SLIDE_TUTORIAL_SEEN_KEY) === '1'; } catch (e) { /* bỏ qua */ }
+    if (hasSeen) return;
+    document.getElementById('slide-tutorial-modal').classList.add('show');
+}
+
+function hideSlideTutorial() {
+    document.getElementById('slide-tutorial-modal').classList.remove('show');
+    try { localStorage.setItem(SLIDE_TUTORIAL_SEEN_KEY, '1'); } catch (e) { /* bỏ qua */ }
+}
+
+document.getElementById('slide-tutorial-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'slide-tutorial-modal') hideSlideTutorial();
 });
 
 // =============================================================================
@@ -2838,6 +3006,16 @@ function render(instant) {
                         <circle cx="20" cy="20" r="15" fill="#7b1fa2" stroke="#4a148c" stroke-width="3"/>
                         <path d="M20 8 A12 12 0 1 1 8 20" stroke="#e1bee7" stroke-width="3" fill="none" stroke-linecap="round"/>
                         <circle cx="20" cy="20" r="4" fill="#f3e5f5"/>
+                    </svg>`;
+            } else if (cell.type === 'W') {
+                // Ô trượt — lộ diện sẵn từ đầu màn như S/E/P, mũi tên chỉ đúng hướng
+                // mèo sẽ bị đẩy tiếp 1 ô sau khi bước vào (xem triggerSlide()). Vẽ
+                // sẵn 1 mũi tên chỉ LÊN rồi tự xoay theo slideDir, khỏi cần 4 icon riêng.
+                el.classList.add('slide-cell');
+                const deg = cell.slideDir.dr === -1 ? 0 : cell.slideDir.dr === 1 ? 180 : cell.slideDir.dc === -1 ? -90 : 90;
+                contentHTML = `
+                    <svg viewBox="0 0 40 40" style="width:30px; height:30px; transform:rotate(${deg}deg);">
+                        <path d="M20 6 L20 34 M20 6 L11 15 M20 6 L29 15" stroke="#01579b" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>`;
             } else {
                 el.classList.add('revealed-safe');
@@ -3173,7 +3351,7 @@ function toggleFlag(r, c, el) {
 }
 
 function handleCellClick(r, c) {
-    if (isGameOver || isWalking || isTeleporting) return;
+    if (isGameOver || isWalking || isTeleporting || isSliding) return;
 
     const dr = r - playerPos.r, dc = c - playerPos.c;
     if (Math.abs(dr) + Math.abs(dc) === 1) {
@@ -3368,7 +3546,7 @@ function attachCellPressHandlers(el, r, c) {
 }
 
 function handleMoveInput(targetR, targetC) {
-    if (isGameOver || isTeleporting) return;
+    if (isGameOver || isTeleporting || isSliding) return;
     if (targetR < 0 || targetR >= GRID_ROWS || targetC < 0 || targetC >= GRID_COLS) return;
     const dr = targetR - playerPos.r;
     const dc = targetC - playerPos.c;
@@ -3698,6 +3876,14 @@ function revealAndMove(r, c) {
         return;
     }
 
+    if (cell.type === 'W') {
+        // Ô trượt LUÔN kích hoạt mỗi lần dẫm trúng (khác cổng đầu — không "tháo
+        // ngòi" sau lần đầu, giống 1 tấm băng trơn vật lý chứ không phải bẫy dùng
+        // 1 lần), kể cả quay lại ô này nhiều lần trong màn.
+        triggerSlide(r, c, cell.slideDir.dr, cell.slideDir.dc);
+        return;
+    }
+
     // Ô thường: nếu không có bẫy VÀ không có cổng đầu lân cận nào, tự mở loang các
     // ô an toàn xung quanh. Chỉ áp dụng cho ô loại N — ô xuất phát (S) không được
     // loang lại mỗi khi mèo quay về đó.
@@ -3745,6 +3931,34 @@ function triggerGateTeleport(r, c) {
             }
         }
         render();
+    }, CAT_MOVE_MS);
+}
+
+// Ô trượt (loại 'W') — mèo dẫm vào bị đẩy tiếp ĐÚNG 1 ô theo hướng mũi tên
+// (cell.slideDir), sau 1 nhịp ngắn để thấy mèo dừng ở ô trượt trước rồi mới
+// trượt tiếp, không phải "dịch chuyển tức thời" như cổng. Gọi lại revealAndMove()
+// cho đúng ô đích để mọi hậu quả (dính bẫy, dẫm cổng đầu, mở ô liên kết, thắng...)
+// xử lý qua ĐÚNG 1 đường logic duy nhất, không phải viết lại riêng từng trường hợp.
+// CỐ Ý KHÔNG dây chuyền dù ô muôn tới cũng là ô trượt khác — mèo dừng lại đó,
+// chờ người chơi tự bước tiếp lần sau (giữ đơn giản, tránh vòng lặp vô hạn nếu 2
+// ô trượt trỏ ngược nhau).
+function triggerSlide(r, c, dr, dc) {
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) return; // trượt ra ngoài bàn cờ -> đứng yên tại ô trượt
+    const targetCell = grid[nr][nc];
+    if (targetCell.type === 'E' && !allColorsFound()) return; // chưa đủ màu -> chặn trượt vào ô cá, giống luật bước thường (xem handleMoveInput())
+
+    const myGeneration = levelGeneration;
+    isSliding = true;
+    updateStatus(t('status_slide'), '#0288d1');
+    setTimeout(() => {
+        isSliding = false;
+        if (myGeneration !== levelGeneration || isGameOver) return;
+        playSound('jump');
+        catIsMoving = true;
+        revealAndMove(nr, nc);
+        render();
+        triggerSquashAnimation();
     }, CAT_MOVE_MS);
 }
 
@@ -4203,5 +4417,10 @@ function attachButtonClickDelay() {
     attachButtonClickDelay();
     initAds(); // không await — banner load nền, không được làm chậm màn Home
     initLeaderboard(); // không await, giống initAds() — im lặng vô hiệu hoá nếu chưa cấu hình Firebase
+    // CHỈ DEV — nút Level Trước/Sau trong màn Chơi, KHÔNG phụ thuộc level đang chơi
+    // (khác dev-regen-row) nên chỉ cần đặt 1 LẦN DUY NHẤT ở đây, không cần lặp lại
+    // mỗi lần loadLevel(). Xem devPrevLevel()/devNextLevel().
+    const devLevelNavRow = document.getElementById('dev-level-nav-row');
+    if (devLevelNavRow) devLevelNavRow.style.display = DEV_LEVEL_TOOLS ? 'flex' : 'none';
 })();
   

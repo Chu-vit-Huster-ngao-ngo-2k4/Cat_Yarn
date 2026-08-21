@@ -152,6 +152,13 @@
             <button class="icon-btn" onclick="showSettings()" title="Cài đặt" data-i18n-title="game_settings_title"><img class="icon-btn-img" src="icon/Settings%201%202nd%20Outline%2064px.png" alt="Cài đặt"></button>
           </div>
         </div>
+        <!-- CHỈ DEV — nhảy thẳng qua/lại 1 level (bỏ qua điều kiện thắng), tiện lướt
+             nhanh nhiều level lúc test — xem DEV_LEVEL_TOOLS trong script.js, ẩn hẳn
+             nếu tắt (false) lúc build bản thật. SẼ BỊ BỎ trước khi phát hành. -->
+        <div class="dev-level-nav-row" id="dev-level-nav-row" style="display:none;">
+          <button class="btn-piffle btn-pink" onclick="devPrevLevel()">◀ [Dev] Level Trước</button>
+          <button class="btn-piffle btn-pink" onclick="devNextLevel()">[Dev] Level Sau ▶</button>
+        </div>
         <div id="status" class="status-banner">Mèo đang đói... Né bẫy tìm đường tới cá thôi! 🐾</div>
         <div class="soi-quanh-row">
           <div class="lives-display" id="lives-display"></div>
@@ -220,6 +227,7 @@
           <option value="gate">🌀 Cổng dịch chuyển</option>
           <option value="color">🎨 Tìm màu</option>
           <option value="link">🔗 Liên kết</option>
+          <option value="slide">🧊 Ô trượt</option>
         </select>
         <button class="btn-piffle btn-yellow" onclick="devRegenerateCurrentLevel()">🎲 [Dev] Gen Lại Level</button>
       </div>
@@ -401,19 +409,65 @@
       <div class="tutorial-tips">
         <div class="tip-row">
           <span class="tip-icon">🎨</span>
-          <span class="tip-text" data-i18n="color_tutorial_tip_hidden">Từ màn này, có 1-2 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.</span>
-        </div>
-        <div class="tip-row">
-          <span class="tip-icon">🐟</span>
-          <span class="tip-text" data-i18n="color_tutorial_tip_fish">Con cá đã có sẵn màu cần tìm — nhìn màu cá là biết cần tìm màu gì.</span>
-        </div>
-        <div class="tip-row">
-          <span class="tip-icon">🔒</span>
-          <span class="tip-text" data-i18n="color_tutorial_tip_locked">Chưa tìm ĐỦ màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!</span>
+          <span class="tip-text" data-i18n="color_tutorial_tip_hidden">Cần tìm đúng màu (khớp màu cá) giấu trong các ô để qua màn!</span>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-piffle btn-green" onclick="hideColorTutorial()" data-i18n="color_tutorial_btn">Đã hiểu! 🐱</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup giới thiệu cơ chế "cổng dịch chuyển" — chỉ hiện 1 lần duy nhất, đúng lúc
+       vào MÀN ĐẦU TIÊN có cơ chế này (xem maybeShowGateTutorial() trong script.js). -->
+  <div id="gate-tutorial-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-icon">🌀</div>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="gate_tutorial_title">Cổng Dịch Chuyển!</h2>
+      <div class="tutorial-tips">
+        <div class="tip-row">
+          <span class="tip-icon">🌀</span>
+          <span class="tip-text" data-i18n="gate_tutorial_tip_dest">Dẫm trúng Cổng Đầu ẩn sẽ bị hút ngay sang Cổng Đích (ô tím, không thua)!</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="hideGateTutorial()" data-i18n="gate_tutorial_btn">Đã hiểu! 🐱</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup giới thiệu cơ chế "liên kết" — chỉ hiện 1 lần duy nhất, đúng lúc vào
+       MÀN ĐẦU TIÊN có cơ chế này (xem maybeShowLinkTutorial() trong script.js). -->
+  <div id="link-tutorial-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-icon">🔗</div>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="link_tutorial_title">Liên Kết!</h2>
+      <div class="tutorial-tips">
+        <div class="tip-row">
+          <span class="tip-icon">🔗</span>
+          <span class="tip-text" data-i18n="link_tutorial_tip_group">Ô cùng màu viền là 1 nhóm — dẫm 1 ô, cả nhóm kích hoạt theo luôn!</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="hideLinkTutorial()" data-i18n="link_tutorial_btn">Đã hiểu! 🐱</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup giới thiệu cơ chế "ô trượt" — chỉ hiện 1 lần duy nhất, đúng lúc vào
+       MÀN ĐẦU TIÊN có cơ chế này (xem maybeShowSlideTutorial() trong script.js). -->
+  <div id="slide-tutorial-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-icon">🧊</div>
+      <h2 class="modal-title" style="color:#4a3022;" data-i18n="slide_tutorial_title">Ô Trượt!</h2>
+      <div class="tutorial-tips">
+        <div class="tip-row">
+          <span class="tip-icon">🧊</span>
+          <span class="tip-text" data-i18n="slide_tutorial_tip_arrow">Ô có mũi tên sẽ đẩy mèo trượt thêm 1 ô theo hướng đó — tính kỹ trước khi bước!</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-piffle btn-green" onclick="hideSlideTutorial()" data-i18n="slide_tutorial_btn">Đã hiểu! 🐱</button>
       </div>
     </div>
   </div>

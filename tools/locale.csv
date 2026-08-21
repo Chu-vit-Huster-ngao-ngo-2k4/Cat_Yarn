@@ -43,10 +43,17 @@ tutorial_tip_flag,Giữ ngón tay trên 1 ô nghi có bẫy để cắm cờ.,Ho
 tutorial_tip_fish,Dẫn mèo tới đĩa cá để qua màn!,Lead the cat to the fish to clear the level!
 tutorial_start_btn,Bắt đầu tập chơi! 👆,Let's start playing! 👆
 color_tutorial_title,Bí Mật Màu Sắc!,Color Secret!
-color_tutorial_tip_hidden,"Từ màn này, có 1-2 ô an toàn giấu sẵn đốm màu — mở trúng sẽ lộ ra.","From this level on, 1-2 safe cells hide a color dot — reveal the right cell to find it."
-color_tutorial_tip_fish,Con cá đã có sẵn màu cần tìm — nhìn màu cá là biết cần tìm màu gì.,The fish already shows the color you need — just look at it to know what to find.
-color_tutorial_tip_locked,"Chưa tìm ĐỦ màu thì chưa bước vào ăn cá được đâu, ráng tìm cho ra nhé!",You can't reach the fish until you've found ALL the needed colors — good luck!
+color_tutorial_tip_hidden,Cần tìm đúng màu (khớp màu cá) giấu trong các ô để qua màn!,Find the right color (matching the fish) hidden in the cells to clear the level!
 color_tutorial_btn,Đã hiểu! 🐱,Got it! 🐱
+gate_tutorial_title,Cổng Dịch Chuyển!,Teleport Gate!
+gate_tutorial_tip_dest,"Dẫm trúng Cổng Đầu ẩn sẽ bị hút ngay sang Cổng Đích (ô tím, không thua)!","Stepping on a hidden Origin Gate pulls you straight to the Destination Gate (purple cell, no loss)!"
+gate_tutorial_btn,Đã hiểu! 🐱,Got it! 🐱
+link_tutorial_title,Liên Kết!,Linked Cells!
+link_tutorial_tip_group,"Ô cùng màu viền là 1 nhóm — dẫm 1 ô, cả nhóm kích hoạt theo luôn!","Cells with the same border color are 1 group — step on one, the whole group activates too!"
+link_tutorial_btn,Đã hiểu! 🐱,Got it! 🐱
+slide_tutorial_title,Ô Trượt!,Slide Tile!
+slide_tutorial_tip_arrow,"Ô có mũi tên sẽ đẩy mèo trượt thêm 1 ô theo hướng đó — tính kỹ trước khi bước!","The arrow tile slides the cat 1 more tile in that direction — think carefully before stepping in!"
+slide_tutorial_btn,Đã hiểu! 🐱,Got it! 🐱
 booster_unlock_btn,Dùng thử ngay!,Try it now!
 tutorial_continue_btn,Tiếp tục,Continue
 home_coming_soon,🔜 Sắp Ra Mắt,🔜 Coming Soon
@@ -99,6 +106,7 @@ hint_bar_start_safe,💡 Mẹo: {count} ô khoanh xanh sát ô xuất phát LUÔ
 status_life_lost,"💔 Mất 1 mạng! Bẫy đã tháo ngòi, còn {lives} mạng, đi tiếp thôi!","💔 Lost a life! The trap is defused, {lives} lives left, keep going!"
 status_boom_practice,"💥 Bụp! Đây là màn làm quen nên không mất mạng đâu, đi tiếp thoải mái!","💥 Boom! This is a practice level so no lives lost, keep going!"
 status_gate_teleport,"🌀 Ối! Mèo vừa lọt vào cổng dịch chuyển, bị hút sang cổng đích rồi!","🌀 Whoa! The cat fell into a portal and got pulled to the destination gate!"
+status_slide,"🧊 Trơn quá! Mèo bị trượt thêm 1 ô theo hướng mũi tên!","🧊 Slippery! The cat slid 1 more tile in the arrow's direction!"
 tutorial_step_1,Chạm ô có bàn tay 👇 để mèo bước tới!,Tap the cell the hand 👇 points at to move the cat!
 tutorial_step_2,Một vùng vừa mở ra! Số trên ô = số bẫy ở 8 ô sát nó.,An area just opened! The number on a cell = how many traps are in its 8 neighbors.
 tutorial_step_3,"Chạm ô số 1 để mèo đứng lên, soi rõ 8 ô quanh nó!",Tap the cell with 1 to stand on it and reveal the 8 cells around it!
