@@ -200,7 +200,7 @@ def collect_constraints(grid, rows_count, width, revealed, deduced_mine, deduced
     return constraints
 
 
-def deduce_layer(grid, rows_count, width, revealed, count_field):
+def deduce_layer(grid, rows_count, width, revealed, count_field, only_ab=False, rule_c_hits=None):
     """
     Y het findHintCell()/deduceLayer() trong script.js: constraint propagation cong don
     tren 1 LOP dem doc lap (count_field), gom 3 luat:
@@ -209,6 +209,12 @@ def deduce_layer(grid, rows_count, width, revealed, count_field):
       Luat C (so sanh 2 dau moi CHONG LAN - pattern "1-2" kinh dien cua Minesweeper):
         neu vung o-chua-biet cua dau moi A la tap CON cua dau moi B, phan CHENH LECH
         (B tru A) phai chua dung (remaining_B - remaining_A) o loai nay.
+
+    only_ab=True: TAT HAN Luat C (dung de do "level nay co THAT SU can Luat C moi
+    giai het khong" - xem compute_difficulty() - so sanh ket qua co/khong Luat C).
+    rule_c_hits (list, optional): neu truyen vao, MOI LAN Luat C thuc su suy ra
+    duoc gi do (deduced_safe/deduced_mine moi) se append(1) vao day - dung de DEM
+    so lan Luat C "ra tay" (xem compute_difficulty()), khong lien quan only_ab.
     """
     deduced_safe = set()
     deduced_mine = set()
@@ -232,24 +238,27 @@ def deduce_layer(grid, rows_count, width, revealed, count_field):
                         changed = True
 
         # Luat C - so sanh tung cap dau moi, tim quan he tap con.
-        for a in constraints:
-            for b in constraints:
-                if a is b or not a['unknown'] or len(a['unknown']) >= len(b['unknown']):
-                    continue
-                if not a['unknown'].issubset(b['unknown']):
-                    continue
-                diff_cells = b['unknown'] - a['unknown']
-                diff_count = b['remaining'] - a['remaining']
-                if diff_count == 0 and diff_cells:
-                    for k in diff_cells:
-                        if k not in deduced_safe:
-                            deduced_safe.add(k)
+        if not only_ab:
+            for a in constraints:
+                for b in constraints:
+                    if a is b or not a['unknown'] or len(a['unknown']) >= len(b['unknown']):
+                        continue
+                    if not a['unknown'].issubset(b['unknown']):
+                        continue
+                    diff_cells = b['unknown'] - a['unknown']
+                    diff_count = b['remaining'] - a['remaining']
+                    if diff_count == 0 and diff_cells:
+                        newly = [k for k in diff_cells if k not in deduced_safe]
+                        if newly:
+                            deduced_safe.update(newly)
                             changed = True
-                elif diff_count == len(diff_cells) and diff_cells:
-                    for k in diff_cells:
-                        if k not in deduced_mine:
-                            deduced_mine.add(k)
+                            if rule_c_hits is not None: rule_c_hits.append(1)
+                    elif diff_count == len(diff_cells) and diff_cells:
+                        newly = [k for k in diff_cells if k not in deduced_mine]
+                        if newly:
+                            deduced_mine.update(newly)
                             changed = True
+                            if rule_c_hits is not None: rule_c_hits.append(1)
 
         # Luat D (suy luan theo nhom lien ket) DA BO - co che Lien Ket gio la "cung
         # kich hoat" chu khong con "cung loai" nua (xem ghi chu dau file), nen
@@ -257,19 +266,22 @@ def deduce_layer(grid, rows_count, width, revealed, count_field):
     return deduced_safe, deduced_mine
 
 
-def deduce(grid, rows_count, width, revealed):
+def deduce(grid, rows_count, width, revealed, only_ab=False, rule_c_hits=None):
     """CHI suy luan theo lop BAY - dung y het deduceAll() trong script.js (cong dau
     khong can suy luan duoc chinh xac, xem ghi chu dau file)."""
-    return deduce_layer(grid, rows_count, width, revealed, 'count')
+    return deduce_layer(grid, rows_count, width, revealed, 'count', only_ab=only_ab, rule_c_hits=rule_c_hits)
 
 
-def simulate(grid, rows_count, width, s_pos, e_pos):
+def simulate(grid, rows_count, width, s_pos, e_pos, only_ab=False, rule_c_hits=None):
     """
     Tra ve dict:
       first_move_bad: list cac o bay nam sat Start (vi pham luat "khong doan nuoc dau")
       reached_e: co toi duoc dia ca thuan tuy bang suy luan khong
       fully_solved: toan bo o thuong co duoc mo het khong (khong con o nao phai doan)
       stuck_cells: cac o thuong (khong phai bay/cong dau) con bi ket lai, can doan mo
+
+    only_ab/rule_c_hits: xem deduce_layer() - dung boi compute_difficulty() de danh
+    gia level co THAT SU can Luat C moi giai het khong, khong dung boi check_rows().
     """
     revealed = [[False] * width for _ in range(rows_count)]
     revealed[s_pos[0]][s_pos[1]] = True
@@ -310,7 +322,7 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
     reached_e = e_reachable()
 
     while True:
-        deduced_safe, _ = deduce(grid, rows_count, width, revealed)
+        deduced_safe, _ = deduce(grid, rows_count, width, revealed, only_ab=only_ab, rule_c_hits=rule_c_hits)
         newly_revealed = False
         for (r, c) in deduced_safe:
             if not revealed[r][c]:
@@ -335,6 +347,115 @@ def simulate(grid, rows_count, width, s_pos, e_pos):
         'reached_e': reached_e,
         'fully_solved': fully_solved,
         'stuck_cells': stuck_cells,
+    }
+
+
+def compute_max_flood_region(grid, rows_count, width):
+    """Vung LOANG TU DO lon nhat (cac o 'N' co count=0 VA count2=0, noi voi nhau
+    qua 8 huong) - giong het genMaxFloodRegion() trong script.js, dung de danh gia
+    do kho: vung nay cang lon thi cang nhieu o "mien phi" tu mo, cang de, ca khi
+    bo qua ca cac chuoi suy luan can thiet o cho khac."""
+    visited = [[False] * width for _ in range(rows_count)]
+    best = 0
+    for r in range(rows_count):
+        for c in range(width):
+            cell = grid[r][c]
+            if visited[r][c] or cell['type'] != 'N' or cell['count'] != 0 or cell['count2'] != 0:
+                continue
+            size = 0
+            stack = [(r, c)]
+            visited[r][c] = True
+            while stack:
+                cr, cc = stack.pop()
+                size += 1
+                for dr, dc in DIRS_8:
+                    nr, nc = cr + dr, cc + dc
+                    if not (0 <= nr < rows_count and 0 <= nc < width) or visited[nr][nc]:
+                        continue
+                    ncell = grid[nr][nc]
+                    if ncell['type'] != 'N' or ncell['count'] != 0 or ncell['count2'] != 0:
+                        continue
+                    visited[nr][nc] = True
+                    stack.append((nr, nc))
+            best = max(best, size)
+    return best
+
+
+def compute_difficulty(rows, rows_count, width, s_pos, e_pos, g_positions, p_pos):
+    """
+    Cham diem do kho TUONG DOI (KHONG phai do kho "cam nhan con nguoi" tuyet doi)
+    dua tren cac chi so tinh duoc tu chinh bo giai:
+      - Mat do bay (cang cao cang kho).
+      - Kich thuoc ban (cang to cang kho - nhieu dau moi phai theo doi cung luc).
+      - Co THAT SU can Luat C moi giai het khong (so sanh ket qua co/khong Luat C
+        - day la tin hieu ro nhat cho "phai suy luan nhieu buoc", khong chi la
+        dem so/mo o don gian) + so lan Luat C thuc su "ra tay".
+      - Ty le vung loang tu do lon nhat / tong o (cang nho cang kho - it o "mien
+        phi", phai suy luan chat che hon).
+      - Ty le o con "ket" (phai doan) - CANH BAO rieng, khong cong vao diem chinh
+        vi day la dau hieu THIEU CONG BANG (doan mo) chu khong phai "kho" dung
+        nghia, dua vao de tham khao rieng.
+    Tra ve dict co 'score' (0-100, cang cao cang kho) va 'tier' (De/Vua/Kho) cung
+    toan bo chi so thanh phan de in ra giai thich VI SAO ra diem do (khong phai
+    hop den).
+    """
+    grid = build_grid(rows, rows_count, width)
+    total_cells = rows_count * width
+    bomb_count = sum(1 for r in range(rows_count) for c in range(width) if grid[r][c]['type'] == 'B')
+    density = bomb_count / total_cells
+
+    rule_c_hits_full = []
+    sim_full = simulate(grid, rows_count, width, s_pos, e_pos, only_ab=False, rule_c_hits=rule_c_hits_full)
+
+    grid_ab = build_grid(rows, rows_count, width)  # bo giai rieng, tranh dinh trang thai voi ban tren
+    sim_ab = simulate(grid_ab, rows_count, width, s_pos, e_pos, only_ab=True)
+    # Luat C "can thiet that" neu thieu no thi KHONG con toi duoc dia ca bang suy
+    # luan thuan tuy nua, hoac so o con ket tang len ro ret.
+    needs_rule_c = (sim_full['reached_e'] and not sim_ab['reached_e']) or \
+        (len(sim_ab['stuck_cells']) > len(sim_full['stuck_cells']))
+
+    max_flood = compute_max_flood_region(grid, rows_count, width)
+    flood_ratio = max_flood / total_cells if total_cells else 0
+
+    mechanic_count = 0
+    if g_positions or p_pos: mechanic_count += 1
+    text = ''.join(rows)
+    if any(ch in text for ch in 'abcdwxyz1234'): mechanic_count += 1
+    if 'C' in text or 'D' in text: mechanic_count += 1
+    if any(ch in text for ch in '^v<>'): mechanic_count += 1
+
+    stuck_ratio = len(sim_full['stuck_cells']) / total_cells if total_cells else 0
+
+    # Cong thuc CHAM DIEM - trong so tuy chinh duoc, uu tien Luat C (tin hieu manh
+    # nhat cho "chuoi suy luan dai") va mat do bay (yeu to co ban nhat cua Minesweeper).
+    size_score = min(1.0, (max(rows_count, width) - 5) / 5)  # 5x5 -> 0, 10x10 -> 1
+    density_score = min(1.0, density / 0.35)  # 0.35 xap xi tran mat do cua bo sinh hien tai
+    rule_c_score = (0.6 + 0.4 * min(1.0, len(rule_c_hits_full) / 6)) if needs_rule_c else 0.0
+    flood_score = 1.0 - min(1.0, flood_ratio / 0.22)  # 0.22 = GEN_MAX_FLOOD_RATIO trong script.js
+    mechanic_score = min(1.0, mechanic_count / 3)
+
+    score = 100 * (
+        0.20 * size_score +
+        0.20 * density_score +
+        0.35 * rule_c_score +
+        0.15 * flood_score +
+        0.10 * mechanic_score
+    )
+    # KHONG dung dau tieng Viet (Kho/Vua/De) - console Windows (cp1258) khong go
+    # duoc 1 so ky tu, tung gap loi UnicodeEncodeError voi cac script khac trong
+    # tools/ (vd build_avatar_list.py) - ca file nay deu co tinh chi dung ASCII
+    # thuan luc in ra console.
+    tier = 'Kho' if score >= 60 else ('Vua' if score >= 32 else 'De')
+
+    return {
+        'score': round(score, 1),
+        'tier': tier,
+        'density': density,
+        'needs_rule_c': needs_rule_c,
+        'rule_c_hits': len(rule_c_hits_full),
+        'flood_ratio': flood_ratio,
+        'mechanic_count': mechanic_count,
+        'stuck_ratio': stuck_ratio,
     }
 
 
@@ -386,6 +507,15 @@ def check_rows(rows, name):
               f"neu nguoi choi di huong do se phai doan mo: {stuck}")
     else:
         print("  [OK] Toan bo ban co giai duoc het bang logic, khong o nao phai doan.")
+
+    if ok:
+        diff = compute_difficulty(rows, rows_count, width, s_pos, e_pos, g_positions, p_pos)
+        rule_c_note = f"CO can ({diff['rule_c_hits']} lan)" if diff['needs_rule_c'] else "khong can"
+        print(f"  [DO KHO] {diff['tier']} (diem {diff['score']}/100) - "
+              f"mat do bay {diff['density']*100:.0f}%, Luat C {rule_c_note}, "
+              f"vung loang lon nhat {diff['flood_ratio']*100:.0f}% ban co, "
+              f"{diff['mechanic_count']} co che phu, "
+              f"{diff['stuck_ratio']*100:.0f}% o phai doan neu lac huong")
 
     print(f"  => {'DAT' if ok else 'KHONG DAT'}")
     print()

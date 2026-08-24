@@ -152,6 +152,13 @@
   .report .verdict.pass { background: #163430; color: var(--teal); }
   .report .verdict.fail { background: #4a2328; color: var(--red); }
   .report .empty { color: var(--ink-soft); font-style: italic; }
+  .report .difficulty {
+    margin-top: 6px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+    background: var(--input-bg); border: 1px solid var(--line);
+  }
+  .report .difficulty.ok { border-color: var(--teal); }
+  .report .difficulty.warn { border-color: #b98900; }
+  .report .difficulty.fail { border-color: var(--red); }
 
   textarea#json-out {
     width: 100%; height: 180px; font-family: Consolas, Menlo, monospace; font-size: 12.5px;
@@ -237,6 +244,18 @@
           📂 Nạp file JSON có sẵn
           <input type="file" id="file-input" accept=".json" style="display:none;">
         </label>
+        <div style="height:8px"></div>
+        <!-- Chọn nguyên thư mục levels/ 1 LẦN, sau đó dùng 2 nút bên dưới lướt qua
+             lại giữa các file đã chọn — khỏi phải mở lại hộp thoại mỗi lần đổi level. -->
+        <label class="ghost full" style="display:block; text-align:center; padding:9px 14px; border-radius:10px; border:1px solid var(--line); font-size:13px; font-weight:600;">
+          📂 Chọn thư mục levels/ (để lướt Trước/Sau)
+          <input type="file" id="folder-input" webkitdirectory multiple style="display:none;">
+        </label>
+        <div class="status-line" id="level-nav-status">Chưa chọn thư mục levels/.</div>
+        <div class="size-row">
+          <button class="action-btn" id="btn-level-prev" style="background:var(--btn-neutral); flex:1;">◀ Level Trước</button>
+          <button class="action-btn" id="btn-level-next" style="background:var(--btn-neutral); flex:1;">Level Sau ▶</button>
+        </div>
         <div class="legend">
           <div><span class="swatch" style="background:#1982c4"></span>Xuất phát (S)</div>
           <div><span class="swatch" style="background:#2a9d8f"></span>Đích (E)</div>
@@ -345,7 +364,10 @@ function runChecker() {
 
 // Tach rieng khoi runChecker() de dung lai duoc cho ca generateSolvableCells()
 // (thu random nhieu bo cuc, cham tung bo cuc bang chinh ham nay).
-function checkSolvable(cells, rows, cols) {
+// onlyAB=true: TAT HAN Luat C — dung boi computeDifficulty() de do "level nay co
+// THAT SU can Luat C moi giai het khong" (chay lai checkSolvable 2 lan, so sanh
+// ket qua co/khong Luat C — giong het compute_difficulty() trong level_checker.py).
+function checkSolvable(cells, rows, cols, onlyAB) {
   const counts = computeCounts(cells, rows, cols);
   const sPos = findSpecial(cells, rows, cols, 2);
   const ePos = findSpecial(cells, rows, cols, 3);
@@ -455,6 +477,7 @@ function checkSolvable(cells, rows, cols) {
   // "1-2" kinh dien: neu vung chua-biet cua A la tap CON cua B, phan chenh lech
   // B-tru-A phai chua dung remaining_B - remaining_A bay) — khop 1:1 voi
   // deduceAll() trong script.js va deduce() trong tools/level_checker.py.
+  let ruleCHits = 0;
   function deduceOnce() {
     const deducedSafe = new Set(), deducedMine = new Set();
     let changed = true;
@@ -470,20 +493,24 @@ function checkSolvable(cells, rows, cols) {
         }
       }
 
-      for (let i = 0; i < constraints.length; i++) {
-        for (let j = 0; j < constraints.length; j++) {
-          if (i === j) continue;
-          const A = constraints[i], B = constraints[j];
-          if (A.unknown.size === 0 || A.unknown.size >= B.unknown.size) continue;
-          let isSubset = true;
-          for (const k of A.unknown) if (!B.unknown.has(k)) { isSubset = false; break; }
-          if (!isSubset) continue;
-          const diffCells = [...B.unknown].filter(k => !A.unknown.has(k));
-          const diffCount = B.remaining - A.remaining;
-          if (diffCount === 0 && diffCells.length > 0) {
-            diffCells.forEach(k => { if (!deducedSafe.has(k)) { deducedSafe.add(k); changed = true; } });
-          } else if (diffCount === diffCells.length && diffCells.length > 0) {
-            diffCells.forEach(k => { if (!deducedMine.has(k)) { deducedMine.add(k); changed = true; } });
+      if (!onlyAB) {
+        for (let i = 0; i < constraints.length; i++) {
+          for (let j = 0; j < constraints.length; j++) {
+            if (i === j) continue;
+            const A = constraints[i], B = constraints[j];
+            if (A.unknown.size === 0 || A.unknown.size >= B.unknown.size) continue;
+            let isSubset = true;
+            for (const k of A.unknown) if (!B.unknown.has(k)) { isSubset = false; break; }
+            if (!isSubset) continue;
+            const diffCells = [...B.unknown].filter(k => !A.unknown.has(k));
+            const diffCount = B.remaining - A.remaining;
+            if (diffCount === 0 && diffCells.length > 0) {
+              const newly = diffCells.filter(k => !deducedSafe.has(k));
+              if (newly.length) { newly.forEach(k => deducedSafe.add(k)); changed = true; ruleCHits++; }
+            } else if (diffCount === diffCells.length && diffCells.length > 0) {
+              const newly = diffCells.filter(k => !deducedMine.has(k));
+              if (newly.length) { newly.forEach(k => deducedMine.add(k)); changed = true; ruleCHits++; }
+            }
           }
         }
       }
@@ -516,7 +543,80 @@ function checkSolvable(cells, rows, cols) {
 
   return {
     sPos, ePos, cPos, dPos, pPos, gatePositions, colorStuck, colorStuck2, counts, firstMoveBad, reachedE,
-    fullySolved: stuckCells.length === 0, stuckCells,
+    fullySolved: stuckCells.length === 0, stuckCells, ruleCHits,
+  };
+}
+
+// Vung LOANG TU DO lon nhat (cac o thuong co count=0, noi voi nhau qua 8 huong)
+// — giong het genMaxFloodRegion()/compute_max_flood_region() ben script.js/
+// level_checker.py, dung de danh gia do kho (xem computeDifficulty() ben duoi).
+function computeMaxFloodRegion(cells, rows, cols, counts) {
+  const isPlain = (t) => t === 0 || t === 4 || t === 5;
+  const visited = new Array(rows * cols).fill(false);
+  const idx2 = (r, c) => r * cols + c;
+  let best = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = idx2(r, c);
+      if (visited[i] || !isPlain(cells[i]) || counts[i] !== 0) continue;
+      let size = 0;
+      const stack = [[r, c]];
+      visited[i] = true;
+      while (stack.length) {
+        const [cr, cc] = stack.pop();
+        size++;
+        for (const [dr, dc] of DIRS8) {
+          const nr = cr + dr, nc = cc + dc;
+          if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+          const ni = idx2(nr, nc);
+          if (visited[ni] || !isPlain(cells[ni]) || counts[ni] !== 0) continue;
+          visited[ni] = true;
+          stack.push([nr, nc]);
+        }
+      }
+      best = Math.max(best, size);
+    }
+  }
+  return best;
+}
+
+// Cham diem do kho TUONG DOI — y het compute_difficulty() trong
+// tools/level_checker.py (xem ghi chu day du o do), chi khac: editor nay CHUA ho
+// tro nhom lien ket (a-d/w-z/1-4) nen khong dem duoc co che do — chi dem
+// gate/dest, mau, o truot.
+function computeDifficulty(cells, rows, cols) {
+  const full = checkSolvable(cells, rows, cols, false);
+  const ab = checkSolvable(cells, rows, cols, true);
+  if (full.errors || ab.errors) return null;
+
+  const total = rows * cols;
+  const bombCount = cells.filter(t => t === 1).length;
+  const density = bombCount / total;
+
+  const needsRuleC = (full.reachedE && !ab.reachedE) || (ab.stuckCells.length > full.stuckCells.length);
+
+  const maxFlood = computeMaxFloodRegion(cells, rows, cols, full.counts);
+  const floodRatio = total ? maxFlood / total : 0;
+
+  let mechanicCount = 0;
+  if (cells.some(t => t === 6 || t === 7)) mechanicCount++; // cong dau/dich
+  if (cells.some(t => t === 4 || t === 5)) mechanicCount++; // mau 1/2
+  if (cells.some(t => t >= 8 && t <= 11)) mechanicCount++; // o truot
+
+  const stuckRatio = total ? full.stuckCells.length / total : 0;
+
+  const sizeScore = Math.min(1, (Math.max(rows, cols) - 5) / 5);
+  const densityScore = Math.min(1, density / 0.35);
+  const ruleCScore = needsRuleC ? (0.6 + 0.4 * Math.min(1, full.ruleCHits / 6)) : 0;
+  const floodScore = 1 - Math.min(1, floodRatio / 0.22);
+  const mechanicScore = Math.min(1, mechanicCount / 3);
+
+  const score = 100 * (0.20 * sizeScore + 0.20 * densityScore + 0.35 * ruleCScore + 0.15 * floodScore + 0.10 * mechanicScore);
+  const tier = score >= 60 ? 'Khó' : (score >= 32 ? 'Vừa' : 'Dễ');
+
+  return {
+    score: Math.round(score * 10) / 10, tier, density, needsRuleC,
+    ruleCHits: full.ruleCHits, floodRatio, mechanicCount, stuckRatio,
   };
 }
 
@@ -749,6 +849,18 @@ function showReport(result) {
 
   html += '</ul>';
   const pass = result.firstMoveBad.length === 0 && result.reachedE && !result.colorStuck && !result.colorStuck2;
+
+  if (pass) {
+    const diff = computeDifficulty(state.cells, state.rows, state.cols);
+    if (diff) {
+      const tierClass = diff.tier === 'Khó' ? 'fail' : (diff.tier === 'Vừa' ? 'warn' : 'ok');
+      html += `<div class="difficulty ${tierClass}">🎯 Độ khó: <b>${diff.tier}</b> (điểm ${diff.score}/100)`
+        + `<br>Mật độ bẫy ${(diff.density * 100).toFixed(0)}%, Luật C ${diff.needsRuleC ? `CÓ cần (${diff.ruleCHits} lần)` : 'không cần'}, `
+        + `vùng loang lớn nhất ${(diff.floodRatio * 100).toFixed(0)}% bàn cờ, ${diff.mechanicCount} cơ chế phụ, `
+        + `${(diff.stuckRatio * 100).toFixed(0)}% ô phải đoán nếu lạc hướng.</div>`;
+    }
+  }
+
   html += `<div class="verdict ${pass ? 'pass' : 'fail'}">${pass ? '✅ ĐẠT' : '❌ KHÔNG ĐẠT'}</div>`;
   el.innerHTML = html;
 }
@@ -922,63 +1034,137 @@ document.getElementById('btn-download').addEventListener('click', () => {
 });
 
 // =============================================================================
-// IMPORT JSON
+// IMPORT JSON — tach rieng phan "kiem tra + ap dung" (applyLoadedRows) de dung
+// lai duoc cho ca chon 1 file rieng LAN chuyen Level Truoc/Sau (xem NAV THU MUC
+// ben duoi) — khong phai chep code 2 lan.
 // =============================================================================
+function applyLoadedRows(data, filename) {
+  if (!Array.isArray(data) || !data.every(x => typeof x === 'string')) {
+    throw new Error('File phải là mảng các chuỗi, ví dụ ["S....", "....."]');
+  }
+  const rows = data.length;
+  const cols = data[0].length;
+  for (const row of data) {
+    if (row.length !== cols) throw new Error('Các dòng không đều nhau về độ dài.');
+    for (const ch of row) if (!'SE#CDGP^v<>.'.includes(ch)) throw new Error(`Ký tự không hợp lệ '${ch}'.`);
+  }
+  const sCount = data.join('').split('').filter(ch => ch === 'S').length;
+  const eCount = data.join('').split('').filter(ch => ch === 'E').length;
+  const cCount = data.join('').split('').filter(ch => ch === 'C').length;
+  const dCount = data.join('').split('').filter(ch => ch === 'D').length;
+  const gCount = data.join('').split('').filter(ch => ch === 'G').length;
+  const pCount = data.join('').split('').filter(ch => ch === 'P').length;
+  if (sCount !== 1) throw new Error(`Phải có đúng 1 ô 'S', hiện có ${sCount}.`);
+  if (eCount !== 1) throw new Error(`Phải có đúng 1 ô 'E', hiện có ${eCount}.`);
+  if (cCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'C' (giấu màu 1), hiện có ${cCount}.`);
+  if (dCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'D' (giấu màu 2), hiện có ${dCount}.`);
+  if (pCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'P' (cổng đích), hiện có ${pCount}.`);
+  if (gCount > 0 && pCount !== 1) throw new Error(`Có ${gCount} ô 'G' (cổng đầu) nhưng không có đúng 1 ô 'P' (cổng đích) đi kèm.`);
+  if (pCount > 0 && gCount === 0) throw new Error(`Có ô 'P' (cổng đích) nhưng không có ô 'G' (cổng đầu) nào cả — vô nghĩa.`);
+
+  const cells = new Array(rows * cols).fill(0);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = data[r][c];
+      cells[r * cols + c] = ch === 'S' ? 2 : ch === 'E' ? 3 : ch === '#' ? 1 : ch === 'C' ? 4 : ch === 'D' ? 5 : ch === 'G' ? 6 : ch === 'P' ? 7 :
+        ch === '^' ? 8 : ch === 'v' ? 9 : ch === '<' ? 10 : ch === '>' ? 11 : 0;
+    }
+  }
+
+  state.rows = rows;
+  state.cols = cols;
+  state.cells = cells;
+  document.getElementById('rows-input').value = rows;
+  document.getElementById('cols-input').value = cols;
+  document.getElementById('filename-input').value = filename;
+  lastResult = null;
+  document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
+  render();
+  flashStatus(`Đã nạp ${filename}`);
+}
+
 document.getElementById('file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const data = JSON.parse(reader.result);
-      if (!Array.isArray(data) || !data.every(x => typeof x === 'string')) {
-        throw new Error('File phải là mảng các chuỗi, ví dụ ["S....", "....."]');
-      }
-      const rows = data.length;
-      const cols = data[0].length;
-      for (const row of data) {
-        if (row.length !== cols) throw new Error('Các dòng không đều nhau về độ dài.');
-        for (const ch of row) if (!'SE#CDGP^v<>.'.includes(ch)) throw new Error(`Ký tự không hợp lệ '${ch}'.`);
-      }
-      const sCount = data.join('').split('').filter(ch => ch === 'S').length;
-      const eCount = data.join('').split('').filter(ch => ch === 'E').length;
-      const cCount = data.join('').split('').filter(ch => ch === 'C').length;
-      const dCount = data.join('').split('').filter(ch => ch === 'D').length;
-      const gCount = data.join('').split('').filter(ch => ch === 'G').length;
-      const pCount = data.join('').split('').filter(ch => ch === 'P').length;
-      if (sCount !== 1) throw new Error(`Phải có đúng 1 ô 'S', hiện có ${sCount}.`);
-      if (eCount !== 1) throw new Error(`Phải có đúng 1 ô 'E', hiện có ${eCount}.`);
-      if (cCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'C' (giấu màu 1), hiện có ${cCount}.`);
-      if (dCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'D' (giấu màu 2), hiện có ${dCount}.`);
-      if (pCount > 1) throw new Error(`Chỉ được tối đa 1 ô 'P' (cổng đích), hiện có ${pCount}.`);
-      if (gCount > 0 && pCount !== 1) throw new Error(`Có ${gCount} ô 'G' (cổng đầu) nhưng không có đúng 1 ô 'P' (cổng đích) đi kèm.`);
-      if (pCount > 0 && gCount === 0) throw new Error(`Có ô 'P' (cổng đích) nhưng không có ô 'G' (cổng đầu) nào cả — vô nghĩa.`);
-
-      const cells = new Array(rows * cols).fill(0);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const ch = data[r][c];
-          cells[r * cols + c] = ch === 'S' ? 2 : ch === 'E' ? 3 : ch === '#' ? 1 : ch === 'C' ? 4 : ch === 'D' ? 5 : ch === 'G' ? 6 : ch === 'P' ? 7 :
-            ch === '^' ? 8 : ch === 'v' ? 9 : ch === '<' ? 10 : ch === '>' ? 11 : 0;
-        }
-      }
-
-      state.rows = rows;
-      state.cols = cols;
-      state.cells = cells;
-      document.getElementById('rows-input').value = rows;
-      document.getElementById('cols-input').value = cols;
-      document.getElementById('filename-input').value = file.name;
-      lastResult = null;
-      document.getElementById('report').innerHTML = '<p class="empty">Chưa kiểm tra — bấm "Kiểm tra logic" ở bên trái.</p>';
-      render();
-      flashStatus(`Đã nạp ${file.name}`);
+      applyLoadedRows(JSON.parse(reader.result), file.name);
     } catch (err) {
       alert('Không nạp được file: ' + err.message);
     }
     e.target.value = '';
   };
   reader.readAsText(file);
+});
+
+// =============================================================================
+// NAV THU MUC — chon nguyên thư mục levels/ 1 LẦN DUY NHẤT (nút "📂 Chọn thư mục
+// levels/"), sau đó dùng 2 nút "◀ Level Trước"/"Level Sau ▶" để lướt qua lại
+// GIỮA CÁC FILE ĐÃ CHỌN mà không phải mở lại hộp thoại chọn file mỗi lần. Trình
+// duyệt KHÔNG cho JS tự đọc thư mục trên đĩa nếu không qua 1 lần chọn thủ công
+// như vầy (an toàn/bảo mật trình duyệt) — không có cách nào bỏ qua bước chọn
+// 1 lần đầu này được.
+// =============================================================================
+let levelFolderFiles = []; // [{ name, num, file }], sap theo so level tang dan
+let levelFolderIdx = -1;
+
+function levelNumFromName(name) {
+  const m = name.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : Infinity;
+}
+
+function loadLevelFolderFile(i) {
+  if (i < 0 || i >= levelFolderFiles.length) return;
+  const entry = levelFolderFiles[i];
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      applyLoadedRows(JSON.parse(reader.result), entry.name);
+      levelFolderIdx = i;
+      updateLevelNavStatus();
+    } catch (err) {
+      alert(`Không nạp được ${entry.name}: ${err.message}`);
+    }
+  };
+  reader.readAsText(entry.file);
+}
+
+function updateLevelNavStatus() {
+  const el = document.getElementById('level-nav-status');
+  if (!el) return;
+  if (!levelFolderFiles.length) {
+    el.textContent = 'Chưa chọn thư mục levels/.';
+  } else {
+    el.textContent = `${levelFolderIdx + 1}/${levelFolderFiles.length} — ${levelFolderFiles[levelFolderIdx]?.name || ''}`;
+  }
+}
+
+document.getElementById('folder-input').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files).filter(f => /^level\d+\.json$/i.test(f.name));
+  if (!files.length) {
+    alert('Không thấy file nào tên dạng levelNN.json trong thư mục vừa chọn.');
+    e.target.value = '';
+    return;
+  }
+  levelFolderFiles = files
+    .map(f => ({ name: f.name, num: levelNumFromName(f.name), file: f }))
+    .sort((a, b) => a.num - b.num);
+  levelFolderIdx = -1;
+  updateLevelNavStatus();
+  loadLevelFolderFile(0);
+  e.target.value = '';
+});
+
+document.getElementById('btn-level-prev').addEventListener('click', () => {
+  if (levelFolderIdx <= 0) { flashStatus('Đã ở level đầu tiên trong thư mục.'); return; }
+  loadLevelFolderFile(levelFolderIdx - 1);
+});
+
+document.getElementById('btn-level-next').addEventListener('click', () => {
+  if (!levelFolderFiles.length) { flashStatus('Chưa chọn thư mục levels/ — bấm "📂 Chọn thư mục levels/" trước.'); return; }
+  if (levelFolderIdx >= levelFolderFiles.length - 1) { flashStatus('Đã ở level cuối cùng trong thư mục.'); return; }
+  loadLevelFolderFile(levelFolderIdx + 1);
 });
 
 // =============================================================================
