@@ -907,12 +907,6 @@ let pendingBubbleLoad = false; // true khi đang bung TOÀN BỘ Ô lúc mới v
 let levelGeneration = 0; // tăng mỗi lần loadLevel() chạy — dùng để huỷ hiệu ứng/popup thắng dở dang nếu lỡ Replay giữa lúc đang ăn mừng
 let usedReviveThisLevel = false; // mỗi lượt chơi 1 màn chỉ được hồi sinh 1 lần (xu hoặc xem QC)
 
-// Cơ chế "3 mạng" — mỗi màn được 3 lần dính bẫy MIỄN PHÍ (tự tháo ngòi, chơi tiếp
-// ngay không cần popup/trả phí gì cả), hết 3 mạng lần dính bẫy tiếp theo mới thật
-// sự thua (hiện popup Thua với Hồi Sinh trả xu/QC như cũ). Reset về đủ MAX_LIVES
-// mỗi khi vào lại màn (loadLevel()), không cộng dồn/trừ qua lại giữa các màn.
-const MAX_LIVES = 3;
-let livesRemaining = MAX_LIVES;
 // Cơ chế "tìm màu cho mèo" — tối đa 2 đốm màu độc lập mỗi màn ('C' = màu 1,
 // 'D' = màu 2). Màn chỉ có 'C' -> giữ nguyên hành vi cũ (nhuộm TOÀN THÂN mèo,
 // tương thích ngược với level đã có). Màn có ĐỦ CẢ 'C' và 'D' -> mèo nhuộm NỬA
@@ -948,20 +942,6 @@ function updateCoinDisplay() {
     document.getElementById('coin-count').textContent = coins;
 }
 
-// Vẽ lại hàng trái tim (3 mạng/màn) — MAX_LIVES trái tim cố định, trái tim nào đã
-// mất (index >= livesRemaining) thì mờ/xám đi thay vì biến mất hẳn, để người chơi
-// luôn thấy rõ "đã mất bao nhiêu / còn bao nhiêu".
-function updateLivesUI() {
-    const el = document.getElementById('lives-display');
-    if (!el) return;
-    let html = '';
-    for (let i = 0; i < MAX_LIVES; i++) {
-        const alive = i < livesRemaining;
-        const src = alive ? 'icon/Heart%202nd%20Outline%2064px.png' : 'icon/Heart%20Black%2064px.png';
-        html += `<img class="life-heart${alive ? '' : ' lost'}" src="${src}" alt="${alive ? 'còn mạng' : 'mất mạng'}">`;
-    }
-    el.innerHTML = html;
-}
 
 const LEVEL_COIN_REWARD = 40;
 
@@ -2121,7 +2101,6 @@ function saveLevelProgress() {
             foundColor1,
             foundColor2,
             usedReviveThisLevel,
-            livesRemaining,
             cells: grid.map(row => row.map(cell => ({
                 revealed: cell.revealed, flagged: cell.flagged, defused: !!cell.defused
             })))
@@ -2375,11 +2354,7 @@ function loadLevel(idx, tryResume) {
         foundColor1 = !!resume.foundColor1;
         foundColor2 = !!resume.foundColor2;
         usedReviveThisLevel = !!resume.usedReviveThisLevel;
-        livesRemaining = (typeof resume.livesRemaining === 'number') ? resume.livesRemaining : MAX_LIVES;
-    } else {
-        livesRemaining = MAX_LIVES; // vào màn mới (không phải khôi phục dở dang) -> luôn đủ 3 mạng
     }
-    updateLivesUI();
 
     document.getElementById('level-title').innerText = t('level_title', { n: currentLevelIdx + 1 });
     // Màn có giấu đốm màu -> báo ngay từ đầu (khớp màu cá đang thấy trên bàn cờ),
@@ -3667,35 +3642,20 @@ function addColorSparkleParticles(x, y) {
 // Toàn bộ hậu quả của việc "dính đúng 1 quả bẫy" (r,c) — tách riêng khỏi
 // revealAndMove() để dùng lại được cho CẢ ô bẫy chính người chơi bước vào LẪN
 // từng ô bẫy khác trong cùng nhóm liên kết bị kích hoạt dây chuyền (xem
-// revealLinkedPartners()) — dẫm 1 lúc trúng nhóm có N quả bẫy liên kết thì mỗi
-// quả tự gọi hàm này 1 lần, trừ đúng N tym (không phải tự động tháo ngòi miễn
-// phí như trước) — càng nhiều bẫy trong nhóm càng đau, đúng tinh thần "dồn hậu
-// quả" của thiết kế liên kết kiểu combo.
+// revealLinkedPartners()) — dẫm 1 lúc trúng nhóm có nhiều quả bẫy liên kết thì
+// quả ĐẦU TIÊN xử lý đã khiến thua ngay (isGameOver=true), revealLinkedPartners()
+// tự dừng kích hoạt tiếp các ô còn lại trong nhóm.
 function applyBombHit(r, c) {
     const cell = grid[r][c];
     if (cell.defused) return; // đã hồi sinh qua đúng ô này rồi -> giờ an toàn, đi xuyên qua bình thường
 
-    // 3 level đầu (idx 0-2) là màn làm quen gameplay -> dính bẫy KHÔNG trừ mạng,
-    // không bao giờ thua, để người chơi mới thoải mái thử/sai trước khi cơ chế 3
-    // tym thật sự có hiệu lực từ level 4 trở đi.
-    const isPracticeLevel = currentLevelIdx < 3;
-
-    // Trừ mạng TRƯỚC rồi mới xét còn hay hết — dính bẫy lần cuối (dùng hết tym)
-    // phải thua LUÔN ở lần đó, không phải tháo ngòi cho qua rồi lần sau mới thua
-    // (dùng >0 mà trừ SAU sẽ bị vậy — đã sửa lại thứ tự cho đúng).
-    if (!isPracticeLevel) {
-        livesRemaining--;
-        updateLivesUI();
-    }
-    if (isPracticeLevel || livesRemaining > 0) {
-        // Vẫn còn tym -> tự tháo ngòi, chơi tiếp NGAY (không hiện popup Thua,
-        // không cần trả xu/xem QC). Hết tym thì rơi xuống luồng Thua/Hồi Sinh
-        // trả phí như cũ bên dưới.
+    // 3 level đầu (idx 0-2) là màn làm quen gameplay -> dính bẫy KHÔNG BAO GIỜ
+    // thua, tự tháo ngòi mãi mãi, để người chơi mới thoải mái thử/sai trước khi
+    // luật "dính 1 bẫy là thua ngay" thật sự có hiệu lực từ level 4 trở đi.
+    if (currentLevelIdx < 3) {
         cell.defused = true;
         playSound('boom');
-        updateStatus(
-            isPracticeLevel ? t('status_boom_practice') : t('status_life_lost', { lives: livesRemaining }),
-            '#ff5964');
+        updateStatus(t('status_boom_practice'), '#ff5964');
         setTimeout(() => {
             const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
             if (cellEl) {
@@ -4054,9 +4014,9 @@ function floodReveal(startR, startC) {
 // 1 nhóm có thể trộn bẫy (a-d) + cổng đầu (w-z), dẫm trúng ô nào thì các ô còn
 // lại trong nhóm cũng lãnh đủ hiệu ứng của CHÍNH NÓ, dồn hết vào 1 lần:
 //   - Ô bẫy (B) trong nhóm: LÃNH NGUYÊN 1 lần trúng bẫy thật (applyBombHit()) —
-//     dẫm trúng 1 ô link với N quả bẫy khác thì mất đúng N+1 tym dồn lại (không
-//     phải tự tháo ngòi miễn phí như bản trước) — càng nhiều bẫy trong nhóm càng
-//     đau, đúng tinh thần "dồn hậu quả" của thiết kế combo.
+//     dẫm trúng 1 ô link với N quả bẫy khác thì quả ĐẦU TIÊN xử lý đã khiến thua
+//     ngay (isGameOver=true), các quả còn lại trong nhóm không kích hoạt tiếp
+//     (xem guard "if (isGameOver) return" trong revealLinkedPartners()).
 //   - Ô cổng đầu (G) trong nhóm: KÍCH HOẠT LUÔN teleport thật sự (không chỉ lộ
 //     ra để biết) — gọi lại đúng triggerGateTeleport() dùng cho lúc dẫm trực
 //     tiếp, để có nguyên vẹn hiệu ứng/tiếng động/hút sang cổng đích. Nếu ô

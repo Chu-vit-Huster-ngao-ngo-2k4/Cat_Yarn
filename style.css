@@ -466,7 +466,7 @@
     .soi-quanh-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end; /* chỉ còn đúng 1 nút (Soi Quanh) từ khi bỏ hàng trái tim -> ghim bên phải như trước */
       gap: 10px;
       align-self: flex-end;
       margin: 10px 0 0;
@@ -488,26 +488,6 @@
       font-size: 0.8rem;
       padding: 7px 8px;
       justify-content: center;
-    }
-
-    /* Hàng trái tim (3 mạng/màn) — mỗi trái tim 1 span, đổi giữa 2 trạng thái còn/mất
-       bằng class .lost thay vì animate trực tiếp. */
-    .lives-display {
-      display: flex;
-      gap: 3px;
-    }
-
-    .lives-display .life-heart {
-      width: 18px;
-      height: 18px;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    /* Tym mất dùng ẢNH KHÁC (icon/Heart Black) chứ không phải lọc màu trên ảnh còn
-       nguyên — nên chỉ cần hơi mờ/nhỏ lại cho rõ là "đã mất", không cần filter nữa. */
-    .lives-display .life-heart.lost {
-      opacity: 0.6;
-      transform: scale(0.85);
     }
 
     /* Huy hiệu số xu hiện có — nhún nhẹ mỗi khi cộng thêm xu */
