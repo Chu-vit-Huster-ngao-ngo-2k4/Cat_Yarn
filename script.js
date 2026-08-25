@@ -1288,9 +1288,12 @@ const GEN_MIN_SIZE = 7, GEN_MAX_SIZE = 10;
 const GEN_DIRS_4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 // Không cho phép 1 vùng ô "count=0" (mở loang tự động, xem floodReveal()) chiếm
 // quá tỉ lệ này trên tổng số ô — mở trúng 1 ô như vậy sẽ lộ ra cả mảng lớn không
-// cần suy luận gì, coi như dễ thắng ăn gian. Cùng ngưỡng đã dùng lúc tạo 70 level
-// tĩnh trước đó.
-const GEN_MAX_FLOOD_RATIO = 0.22;
+// cần suy luận gì, coi như dễ thắng ăn gian. Hạ từ 0.22 xuống 0.15 (yêu cầu người
+// dùng: level tự sinh mở ra "trống" quá, 1 lần bung cả mảng lớn) — CHỈ áp cho bộ
+// sinh tự động (genTryLevel()), KHÔNG đụng tới ngưỡng 0.22 dùng để CHẤM ĐIỂM level
+// tĩnh trong tools/level_checker.py (2 việc khác nhau: đây là ràng buộc lúc SINH,
+// kia là mốc quy đổi điểm lúc CHẤM level đã có sẵn).
+const GEN_MAX_FLOOD_RATIO = 0.15;
 
 // Tính kích thước vùng liên thông LỚN NHẤT gồm toàn ô count=0 (không tính bẫy) —
 // đúng logic mà floodReveal() dùng để mở loang (nối nhau qua 8 hướng).
@@ -1477,11 +1480,62 @@ function genSimulate(grid, size, sPos, ePos) {
     return { firstMoveBad: false, reachedE: eReachable() };
 }
 
-// Random 1 layout ứng viên rồi kiểm bằng genSimulate() — thử nhiều lần tới khi ra
-// 1 bàn cờ giải được thuần logic (đúng chuẩn mọi level khác trong game).
-function genTryLevel(size, density) {
-    const sPos = [0, 0], ePos = [size - 1, size - 1];
+// Điểm xuất phát LUÔN cố định (0,0) (nhiều chỗ khác — genPlaceGates/genPlaceColor/
+// genPlaceSlide/genPlaceLinkGroup... — giả định sẵn điều này) nhưng Địa Cá không
+// nhất thiết phải luôn ở góc dưới-phải nữa — LUÔN ưu tiên vị trí KHÓ TIẾP CẬN NHẤT
+// (nhiều ô kề 4 hướng nhất — ô giữa bàn có 4 cửa ngõ, cạnh có 3, góc chỉ 2 — càng
+// nhiều cửa ngõ thì trapNearE() bên genTryLevel() càng phải ép nhiều ô thành bẫy
+// mới chỉ chừa đúng 1 lối an toàn, "bị bao quanh bởi bom" rõ hơn hẳn so với góc)
+// rồi mới tới vị trí XA Start nhất trong số đó (phân định khi đồng hạng số cửa
+// ngõ) — chỉ random giữa các vị trí ĐÚNG top điểm cao nhất, không còn đều tay như
+// trước. Chỉ xét trong vùng CÁCH Start ít nhất size-3 ô (Chebyshev) để không bao
+// giờ rơi vào gần Start dù ưu tiên số cửa ngõ trước khoảng cách.
+function genPickEPos(size) {
+    const candidates = [];
+    for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+            if (r === 0 && c === 0) continue; // trùng Start
+            if (Math.max(r, c) < size - 3) continue; // quá gần Start, loại thẳng
+            let neighborCount = 0;
+            for (const [dr, dc] of GEN_DIRS_4) {
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < size && nc >= 0 && nc < size) neighborCount++;
+            }
+            candidates.push({ pos: [r, c], neighborCount, manhattan: r + c });
+        }
+    }
+    candidates.sort((a, b) => b.neighborCount - a.neighborCount || b.manhattan - a.manhattan);
+    const topNeighborCount = candidates[0].neighborCount;
+    const topManhattan = candidates
+        .filter(x => x.neighborCount === topNeighborCount)
+        .reduce((max, x) => Math.max(max, x.manhattan), 0);
+    const best = candidates.filter(x => x.neighborCount === topNeighborCount && x.manhattan === topManhattan);
+    return best[Math.floor(Math.random() * best.length)].pos;
+}
+
+// trapNearE (level KHÓ mới dùng, xem generateProceduralLevel()): Địa Cá có thể ở
+// góc (2 ô kề 4 hướng), cạnh (3 ô) hay giữa bàn (4 ô) tuỳ genPickEPos() chọn — bất
+// kể bao nhiêu ô kề, CHỈ CHỪA ĐÚNG 1 làm "cửa ngõ" an toàn, còn lại ép hết thành
+// bẫy (đích luôn bị bẫy bao quanh, chỉ 1 đường vào) — giống hệt cách sửa level58
+// tĩnh, giờ tổng quát hoá cho mọi vị trí đích thay vì chỉ đúng góc.
+// floodRatioCap: trần tỉ lệ vùng loang tự do (mặc định GEN_MAX_FLOOD_RATIO) —
+// level càng khó truyền trần THẤP hơn để đường đi "ngoằn ngoèo" hơn, ít ô tự mở
+// theo mảng lớn, phải suy luận nhiều bước hơn mới thấy đường.
+function genTryLevel(size, density, trapNearE, floodRatioCap, ePosParam) {
+    const sPos = [0, 0], ePos = ePosParam || [size - 1, size - 1];
     const forbidden = new Set([`${sPos[0]},${sPos[1]}`, `${ePos[0]},${ePos[1]}`]);
+    let forcedBombCells = [], forcedSafeCell = null;
+    if (trapNearE) {
+        const eNeighbors = [[ePos[0] - 1, ePos[1]], [ePos[0] + 1, ePos[1]], [ePos[0], ePos[1] - 1], [ePos[0], ePos[1] + 1]]
+            .filter(([r, c]) => r >= 0 && r < size && c >= 0 && c < size);
+        if (eNeighbors.length >= 2) {
+            const safeIdx = Math.floor(Math.random() * eNeighbors.length);
+            forcedSafeCell = eNeighbors[safeIdx];
+            forcedBombCells = eNeighbors.filter((_, i) => i !== safeIdx);
+            forbidden.add(`${forcedSafeCell[0]},${forcedSafeCell[1]}`);
+            for (const [r, c] of forcedBombCells) forbidden.add(`${r},${c}`);
+        }
+    }
     // CẢ 8 hướng quanh Start (không chỉ 4 hướng ngang/dọc mà mèo thật sự đi được) —
     // Start nằm góc (0,0) nên chỉ có đúng 3 ô lân cận hợp lệ (phải, dưới, chéo dưới-
     // phải), cả 3 đều đảm bảo không phải bẫy. Rộng rãi hơn hẳn mức "chỉ cần nước đi
@@ -1504,6 +1558,7 @@ function genTryLevel(size, density) {
     }
     const nBombs = Math.round(size * size * density);
     const bombs = new Set(cells.slice(0, nBombs).map(([r, c]) => `${r},${c}`));
+    for (const [r, c] of forcedBombCells) bombs.add(`${r},${c}`); // forcedSafeCell KHÔNG bao giờ thêm vào bombs — chắc chắn an toàn
 
     const rows = [];
     for (let r = 0; r < size; r++) {
@@ -1523,7 +1578,8 @@ function genTryLevel(size, density) {
     // 1 phát ra cả mảng lớn, xem floodReveal()) chiếm quá GEN_MAX_FLOOD_RATIO tổng
     // số ô, người chơi mở trúng ô đó coi như ăn gian thắng luôn (lộ gần hết bàn cờ
     // không cần suy luận gì thêm) — huỷ, thử random lại layout khác.
-    if (genMaxFloodRegion(grid, size) / (size * size) > GEN_MAX_FLOOD_RATIO) return null;
+    const effectiveFloodCap = floodRatioCap || GEN_MAX_FLOOD_RATIO;
+    if (genMaxFloodRegion(grid, size) / (size * size) > effectiveFloodCap) return null;
     return { rows, bombs, size };
 }
 
@@ -1541,7 +1597,8 @@ const GEN_GATE_MIN = 2, GEN_GATE_MAX = 4;
 // nghĩa, không lọt vào 1 túi kín không bao giờ chạm tới.
 function genPlaceGates(rows, size, bombs, sPos) {
     const sKey = `${sPos[0]},${sPos[1]}`;
-    const eKey = `${size - 1},${size - 1}`;
+    const ePos = genFindPos(rows, 'E');
+    const eKey = `${ePos[0]},${ePos[1]}`;
     const reachable = genReachableCells(bombs, size, sPos);
     const candidates = [];
     for (let r = 0; r < size; r++) {
@@ -1566,7 +1623,7 @@ function genPlaceGates(rows, size, bombs, sPos) {
     // suy luận cẩn thận mới thoát ra được, không phải cứ tới nơi là đi thẳng.
     const pScored = candidates.map(pos => {
         const distS = Math.max(Math.abs(pos[0] - sPos[0]), Math.abs(pos[1] - sPos[1]));
-        const distE = Math.max(Math.abs(pos[0] - (size - 1)), Math.abs(pos[1] - (size - 1)));
+        const distE = Math.max(Math.abs(pos[0] - ePos[0]), Math.abs(pos[1] - ePos[1]));
         let nearbyBombs = 0;
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
@@ -1607,7 +1664,7 @@ function genPlaceGates(rows, size, bombs, sPos) {
 
 const GEN_SLIDE_CHANCE = 0.3;
 const GEN_SLIDE_MIN = 1, GEN_SLIDE_MAX = 3;
-const GEN_SLIDE_RISKY_CHANCE = 0.8; // xác suất ưu tiên hướng đẩy thẳng vào bẫy khi có sẵn hướng đó
+const GEN_SLIDE_RISKY_CHANCE = 0.9; // xác suất ưu tiên hướng đẩy thẳng vào bẫy khi có sẵn hướng đó (nâng từ 0.8 theo yêu cầu người dùng, cộng thêm việc ưu tiên chọn Ô có sẵn hướng nguy hiểm trước — xem genPlaceSlide())
 const GEN_SLIDE_DIRS = [
     { dr: -1, dc: 0, ch: '^' },
     { dr: 1, dc: 0, ch: 'v' },
@@ -1624,7 +1681,8 @@ const GEN_SLIDE_DIRS = [
 // diện sẵn, không phải ô cần đoán.
 function genPlaceSlide(rows, size, bombs, sPos) {
     const sKey = `${sPos[0]},${sPos[1]}`;
-    const eKey = `${size - 1},${size - 1}`;
+    const ePosForSlide = genFindPos(rows, 'E');
+    const eKey = `${ePosForSlide[0]},${ePosForSlide[1]}`;
     const reachable = genReachableCells(bombs, size, sPos);
     const candidates = [];
     for (let r = 0; r < size; r++) {
@@ -1641,6 +1699,21 @@ function genPlaceSlide(rows, size, bombs, sPos) {
         const j = Math.floor(Math.random() * (i + 1));
         [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
+    // Ưu tiên xét TRƯỚC các ô có sẵn ít nhất 1 hướng trượt thẳng vào bẫy — trước đây
+    // random đều trong MỌI ô trống nên phần lớn ô được chọn chẳng có hướng nguy hiểm
+    // nào cả (0 bẫy kề cạnh), khiến GEN_SLIDE_RISKY_CHANCE dù cao vẫn hiếm khi có cơ
+    // hội "ra tay" — giờ gom nhóm "có bẫy kề cạnh" lên đầu hàng chờ (yêu cầu người
+    // dùng: tăng xác suất trượt vào bẫy).
+    const hasRiskyDir = ([r, c]) => {
+        for (const d of GEN_SLIDE_DIRS) {
+            const nr = r + d.dr, nc = c + d.dc;
+            if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+            if (nr === sPos[0] && nc === sPos[1]) continue;
+            if (bombs.has(`${nr},${nc}`)) return true;
+        }
+        return false;
+    };
+    candidates.sort((a, b) => (hasRiskyDir(b) ? 1 : 0) - (hasRiskyDir(a) ? 1 : 0));
 
     const grid2 = rows.map(row => row.split(''));
     const nSlides = Math.min(candidates.length, GEN_SLIDE_MIN + Math.floor(Math.random() * (GEN_SLIDE_MAX - GEN_SLIDE_MIN + 1)));
@@ -1677,6 +1750,36 @@ function genPlaceSlide(rows, size, bombs, sPos) {
 // ngoài vùng này (lọt vào 1 túi bị bẫy bao kín hoàn toàn) sẽ khiến level KHÔNG
 // THỂ THẮNG — cá luôn chặn cho tới khi tìm đủ màu mà mèo lại không bao giờ tới
 // được ô màu đó.
+// Đếm số bẫy kề 8 hướng quanh (r,c) — dùng để LOẠI các ô count=0 khỏi ứng viên đặt
+// màu/nhóm liên kết thường (xem genPlaceColor()/genPlaceLinkGroup() bên dưới): ô
+// count=0 sẽ bị floodReveal() tự mở loang MIỄN PHÍ cùng cả vùng xung quanh, lộ
+// luôn ô cơ chế mà người chơi không cần suy luận/chủ động click gì — coi như dễ
+// ăn gian (yêu cầu người dùng).
+function genCellBombCount(bombs, size, r, c) {
+    let cnt = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+            if (bombs.has(`${nr},${nc}`)) cnt++;
+        }
+    }
+    return cnt;
+}
+
+// Tìm toạ độ ô mang ký tự ch trong rows[] — dùng để các hàm đặt cơ chế phía dưới
+// (gate/slide/link/color) xác định ĐÚNG vị trí Địa Cá thật sự (từ khi Địa Cá có
+// thể nằm ở nhiều chỗ khác nhau, xem genPickEPos(), không còn cố định góc dưới-
+// phải để hardcode toạ độ được nữa).
+function genFindPos(rows, ch) {
+    for (let r = 0; r < rows.length; r++) {
+        const c = rows[r].indexOf(ch);
+        if (c !== -1) return [r, c];
+    }
+    return null;
+}
+
 function genReachableCells(bombs, size, sPos) {
     const visited = new Set([`${sPos[0]},${sPos[1]}`]);
     const queue = [sPos];
@@ -1716,7 +1819,8 @@ function genShuffled(arr) {
 // (b) Nhóm Ô THƯỜNG liên kết ('1'-'4'): gắn nhãn nhóm lên 2-3 ô '.' còn trống,
 //     ưu tiên trong vùng mèo THẬT SỰ đi tới được (giống C/D) để cơ chế có ý nghĩa.
 function genPlaceLinkGroup(rows, size, bombs) {
-    const sKey = '0,0', eKey = `${size - 1},${size - 1}`;
+    const ePosLink = genFindPos(rows, 'E');
+    const sKey = '0,0', eKey = `${ePosLink[0]},${ePosLink[1]}`;
     let grid2 = rows.map(row => row.split(''));
 
     const trapChars = genShuffled(['a', 'b', 'c', 'd']);
@@ -1749,6 +1853,7 @@ function genPlaceLinkGroup(rows, size, bombs) {
                     if (key === sKey || key === eKey || bombs.has(key)) continue;
                     if (grid2[r][c] !== '.') continue; // đã bị cơ chế khác (G/P/C/D/nhóm khác nếu đặt trước) chiếm mất
                     if (!reachable.has(key)) continue;
+                    if (genCellBombCount(bombs, size, r, c) === 0) continue; // count=0 -> bị floodReveal() mở loang miễn phí, mất ý nghĩa cơ chế
                     candidates.push([r, c]);
                 }
             }
@@ -1765,7 +1870,8 @@ function genPlaceLinkGroup(rows, size, bombs) {
 }
 
 function genPlaceColor(rows, size, bombs, dual) {
-    const sPos = '0,0', ePos = `${size - 1},${size - 1}`;
+    const ePosXY = genFindPos(rows, 'E');
+    const sPos = '0,0', ePos = `${ePosXY[0]},${ePosXY[1]}`;
     const reachable = genReachableCells(bombs, size, [0, 0]);
     const candidates = [];
     for (let r = 0; r < size; r++) {
@@ -1774,6 +1880,7 @@ function genPlaceColor(rows, size, bombs, dual) {
             if (key === sPos || key === ePos || bombs.has(key)) continue;
             if (rows[r][c] !== '.') continue; // đã bị cổng dịch chuyển (G/P, nếu genPlaceGates chạy trước) chiếm mất
             if (!reachable.has(key)) continue; // đi không tới được -> loại thẳng, không xét nữa
+            if (genCellBombCount(bombs, size, r, c) === 0) continue; // count=0 -> bị floodReveal() mở loang miễn phí, mất ý nghĩa "tìm màu"
             candidates.push([r, c]);
         }
     }
@@ -1785,7 +1892,7 @@ function genPlaceColor(rows, size, bombs, dual) {
     // thay vì thấy ngay gần lúc mới vào màn hoặc gần lúc sắp tới đích.
     const scored = candidates.map(([r, c]) => {
         const distS = r + c; // Start ở (0,0)
-        const distE = (size - 1 - r) + (size - 1 - c); // Đích ở góc đối diện
+        const distE = Math.abs(ePosXY[0] - r) + Math.abs(ePosXY[1] - c);
         return { pos: [r, c], score: Math.min(distS, distE) };
     });
     scored.sort((a, b) => b.score - a.score);
@@ -1803,11 +1910,39 @@ function genPlaceColor(rows, size, bombs, dual) {
     return grid2.map(row => row.join(''));
 }
 
-// "Luôn khó" theo yêu cầu — mật độ bẫy giữ ở mức cao cố định theo từng cỡ lưới
-// (không tăng dần từ dễ), lưới càng lớn thì mật độ trần thấp hơn 1 chút (lưới lớn
-// dễ tìm bàn cờ giải được ở mật độ cao hơn lưới nhỏ, nhưng vẫn phải né random quá
-// lâu không ra kết quả) — số liệu tham khảo từ đợt tạo 70 level tĩnh trước đó.
+// Mật độ bẫy TRẦN theo từng cỡ lưới (dùng làm mốc 100% độ khó trong genDifficultyWave()
+// bên dưới) — lưới càng lớn thì mật độ trần thấp hơn 1 chút (lưới lớn dễ tìm bàn cờ
+// giải được ở mật độ cao hơn lưới nhỏ, nhưng vẫn phải né random quá lâu không ra kết
+// quả) — số liệu tham khảo từ đợt tạo 70 level tĩnh trước đó.
 const GEN_DENSITY_BY_SIZE = { 7: 0.33, 8: 0.32, 9: 0.30, 10: 0.28 };
+
+// Độ khó/kích thước level tự sinh KHÔNG được tịnh tiến thẳng mãi (yêu cầu người
+// dùng) — phải xen kẽ dễ/khó, to/nhỏ cục bộ, trong khi vẫn có xu hướng nhích lên
+// chậm rãi theo idx (0-based, level thứ idx+1). 2 sóng riêng biệt (chu kỳ/pha khác
+// nhau) cho độ khó và kích thước để chúng không luôn dao động cùng nhịp — có lúc
+// bàn nhỏ mà khó, có lúc bàn to mà dễ, giống cảm giác "xen kẽ" người dùng muốn chứ
+// không phải 2 trục luôn đi cùng nhau.
+function genDifficultyWave(idx) {
+    const trend = Math.min(1, 0.35 + idx / 300); // sàn 35%, chạm trần quanh idx=195 rồi giữ nguyên
+    const osc = 0.3 * Math.sin(idx / 5); // biên độ +-30%, chu kỳ ~5 level -> nhấp nhô liên tục
+    return Math.max(0.05, Math.min(1, trend + osc));
+}
+function genSizeWave(idx) {
+    const trend = 0.5 + idx / 400; // xu hướng kích thước nhích lên RẤT chậm
+    const osc = 0.45 * Math.sin(idx / 4 + 1.3); // chu kỳ/pha khác genDifficultyWave() ở trên
+    const t = Math.max(0, Math.min(1, trend + osc));
+    return Math.round(GEN_MIN_SIZE + t * (GEN_MAX_SIZE - GEN_MIN_SIZE));
+}
+// Xác suất 1 cơ chế phụ (màu/cổng/liên kết/trượt) xuất hiện tăng dần theo idx thay
+// vì cố định — level tự sinh càng về sau càng hay "chồng" nhiều cơ chế cùng lúc
+// (yêu cầu người dùng: "level 70 có cơ chế khác" — không phải cơ chế MỚI, vì hiện
+// chỉ có 4 cơ chế, mà là combo/tần suất khác biệt rõ rệt khi đi sâu). rampStart =
+// idx bắt đầu tính (ngay khi hết level tĩnh), rampFull = idx đạt xác suất gốc 100%.
+function genMechanicChance(baseChance, idx, rampStart, rampFull) {
+    if (idx < rampStart) return baseChance * 0.4;
+    const t = Math.min(1, (idx - rampStart) / Math.max(1, rampFull - rampStart));
+    return baseChance * (0.4 + 0.6 * t);
+}
 
 // Sinh 1 level mới, thử tối đa GEN_MAX_TRIES lần (mỗi lần random khác nhau), hạ
 // dần mật độ nếu mãi không ra bàn cờ giải được (tránh treo trình duyệt) — luôn trả
@@ -1820,43 +1955,89 @@ const GEN_MAX_TRIES = 400;
 // thất bại, để "chắc chắn có đường đi tới đích" là đảm bảo TUYỆT ĐỐI chứ không
 // phải "gần như chắc chắn". Chỉ dùng khi mọi mật độ khác đều xui không ra kết quả
 // (cực hiếm — hàng nghìn lượt thử ở nhiều mật độ khác nhau).
-function genGuaranteedFallback(size) {
+function genGuaranteedFallback(size, ePos) {
+    const [er, ec] = ePos || [size - 1, size - 1];
     const rows = [];
     for (let r = 0; r < size; r++) {
         let row = '';
         for (let c = 0; c < size; c++) {
-            row += (r === 0 && c === 0) ? 'S' : (r === size - 1 && c === size - 1) ? 'E' : '.';
+            row += (r === 0 && c === 0) ? 'S' : (r === er && c === ec) ? 'E' : '.';
         }
         rows.push(row);
     }
     return { rows, bombs: new Set(), size };
 }
 
+// idx (0-based, level thứ idx+1): dùng để tra genSizeWave()/genDifficultyWave()/
+// genMechanicChance() ở trên — QUYẾT ĐỊNH kích thước/mật độ/xác suất cơ chế xen kẽ
+// theo idx thay vì random phẳng như trước. Có thể bỏ trống (undefined) — khi đó
+// coi như idx rất lớn (luôn khó, như hành vi CŨ trước khi có sóng xen kẽ) để không
+// phá vỡ chỗ gọi cũ nào lỡ quên truyền idx.
 // forceMechanic (CHỈ DEV — xem devRegenerateCurrentLevel()): undefined/null = random
 // bình thường (xác suất mặc định cho từng cơ chế, độc lập nhau, có thể ra 0/nhiều
 // cơ chế cùng lúc như trước giờ); 'none' = ép KHÔNG cơ chế nào (chỉ bẫy thường);
 // 'gate'/'color'/'link'/'slide' = ép CHẮC CHẮN có đúng cơ chế đó, tắt hẳn các cơ
 // chế còn lại — tiện dev test riêng từng cơ chế mà không phải random nhiều lần
 // mới trúng.
-function generateProceduralLevel(forceMechanic) {
-    const size = GEN_MIN_SIZE + Math.floor(Math.random() * (GEN_MAX_SIZE - GEN_MIN_SIZE + 1));
-    let density = GEN_DENSITY_BY_SIZE[size] || 0.30;
+function generateProceduralLevel(idx, forceMechanic) {
+    const waveIdx = (typeof idx === 'number') ? idx : 300;
+    const sizeCenter = genSizeWave(waveIdx);
+    // Rung nhẹ +-1 quanh sóng để cùng 1 idx không luôn ra đúng 1 kích thước y hệt.
+    const jitter = Math.floor(Math.random() * 3) - 1;
+    const size = Math.max(GEN_MIN_SIZE, Math.min(GEN_MAX_SIZE, sizeCenter + jitter));
+    const diffWave = genDifficultyWave(waveIdx); // 0..1, 0 = dễ nhất, 1 = khó trần
+    const baseDensity = GEN_DENSITY_BY_SIZE[size] || 0.30;
+    let density = baseDensity * (0.75 + 0.25 * diffWave);
     let result = null;
+    // Level Vừa/Khó (diffWave >= 0.5, tương đương ngưỡng tier trong compute_difficulty
+    // phía tools/level_checker.py) — cài bẫy ở ĐÚNG 1 trong 2 "cửa ngõ" vào địa cá
+    // (xem genTryLevel()), và siết trần vùng loang tự do lại (đường đi ngoằn ngoèo
+    // hơn, ít ô tự mở hàng loạt) — càng khó siết càng chặt, sàn giữ lại 65% trần gốc
+    // (GEN_MAX_FLOOD_RATIO) để không siết tới mức không tìm ra bàn nào giải được.
+    const trapNearE = diffWave >= 0.5;
+    const floodRatioCap = GEN_MAX_FLOOD_RATIO * (1 - 0.35 * diffWave);
+    // Địa Cá không nhất thiết luôn ở góc dưới-phải nữa (xem genPickEPos()) — chọn
+    // 1 LẦN, dùng chung cho mọi lần thử lại bên dưới (kể cả vòng dự phòng/phao cứu
+    // sinh) để không đổi chỗ giữa chừng cùng 1 lượt sinh level.
+    const ePos = genPickEPos(size);
     // Hạ mật độ dần qua nhiều vòng, mỗi vòng thử GEN_MAX_TRIES lần — càng hạ mật độ
     // càng dễ ra bàn cờ giải được, tới khi chạm hẳn 0 (genGuaranteedFallback ở trên)
     // thì KHÔNG THỂ nào thất bại được nữa về mặt toán học.
     for (let attempt = 0; attempt < 10 && !result; attempt++) {
         for (let i = 0; i < GEN_MAX_TRIES && !result; i++) {
-            result = genTryLevel(size, Math.max(0, density));
+            result = genTryLevel(size, Math.max(0, density), trapNearE, floodRatioCap, ePos);
         }
         density -= 0.04;
     }
-    if (!result) result = genGuaranteedFallback(size); // phao cứu sinh — không bao giờ null
+    // Phòng khi bẫy-cửa-ngõ + trần loang chặt khiến 10 vòng đều thất bại (hiếm) —
+    // thử thêm 1 loạt KHÔNG ép trapNearE/floodRatioCap trước khi phải dùng tới
+    // genGuaranteedFallback() (bàn 0 bẫy, mất hẳn hiệu ứng "khó" nhưng không bao
+    // giờ null).
+    if (!result) {
+        density = baseDensity * (0.55 + 0.45 * diffWave);
+        for (let attempt = 0; attempt < 5 && !result; attempt++) {
+            for (let i = 0; i < GEN_MAX_TRIES && !result; i++) {
+                result = genTryLevel(size, Math.max(0, density), false, undefined, ePos);
+            }
+            density -= 0.04;
+        }
+    }
+    if (!result) result = genGuaranteedFallback(size, ePos); // phao cứu sinh — không bao giờ null
 
-    const gateChance = forceMechanic ? (forceMechanic === 'gate' ? 1 : 0) : GEN_GATE_CHANCE;
-    const colorChance = forceMechanic ? (forceMechanic === 'color' ? 1 : 0) : 0.75;
-    const linkChance = forceMechanic ? (forceMechanic === 'link' ? 1 : 0) : GEN_LINK_CHANCE;
-    const slideChance = forceMechanic ? (forceMechanic === 'slide' ? 1 : 0) : GEN_SLIDE_CHANCE;
+    // Ramp tính từ mốc HẾT level tĩnh (STATIC_LEVEL_COUNT) chứ không phải idx=0 —
+    // xác suất cơ chế phụ đạt trần gốc sau ~30 level tự sinh ĐẦU TIÊN (không phải
+    // đã đầy ngay từ idx=30 tuyệt đối, lúc đó vẫn còn đang chơi level tĩnh).
+    const rampStart = STATIC_LEVEL_COUNT, rampFull = STATIC_LEVEL_COUNT + 30;
+    // Cổng dịch chuyển: các mốc cơ chế phải cách nhau >=20 level (màu~12, trượt~34,
+    // liên kết~56 trong 59 level tĩnh) và cổng phải xuất hiện SAU CÙNG, quanh
+    // level100 — nên KHÔNG dùng chung ramp ở trên, ép hẳn 0% tới GATE_UNLOCK_IDX
+    // (idx 0-based, level100 = idx 99) rồi mới ramp riêng.
+    const GATE_UNLOCK_IDX = 99;
+    const gateChance = forceMechanic ? (forceMechanic === 'gate' ? 1 : 0) :
+        (waveIdx < GATE_UNLOCK_IDX ? 0 : genMechanicChance(GEN_GATE_CHANCE, waveIdx, GATE_UNLOCK_IDX, GATE_UNLOCK_IDX + 30));
+    const colorChance = forceMechanic ? (forceMechanic === 'color' ? 1 : 0) : genMechanicChance(0.75, waveIdx, rampStart, rampFull);
+    const linkChance = forceMechanic ? (forceMechanic === 'link' ? 1 : 0) : genMechanicChance(GEN_LINK_CHANCE, waveIdx, rampStart, rampFull);
+    const slideChance = forceMechanic ? (forceMechanic === 'slide' ? 1 : 0) : genMechanicChance(GEN_SLIDE_CHANCE, waveIdx, rampStart, rampFull);
 
     let rows = result.rows;
     // Đặt cổng dịch chuyển, liên kết, ô trượt TRƯỚC màu (genPlaceColor bên dưới tự
@@ -1882,7 +2063,7 @@ function generateProceduralLevel(forceMechanic) {
 // vào 1 level (chơi tiếp, Màn Tiếp, cheat nhảy level...) đều tự động được che phủ,
 // không cần sửa từng nơi riêng lẻ.
 function ensureLevelGenerated(idx) {
-    while (LEVELS.length <= idx) LEVELS.push(generateProceduralLevel());
+    while (LEVELS.length <= idx) LEVELS.push(generateProceduralLevel(LEVELS.length));
 }
 
 // CHỈ DEV (xem DEV_LEVEL_TOOLS) — tải file JSON của 1 level TỰ SINH về máy,
@@ -1914,7 +2095,7 @@ function devRegenerateCurrentLevel() {
     if (!DEV_LEVEL_TOOLS || currentLevelIdx < STATIC_LEVEL_COUNT) return;
     const select = document.getElementById('dev-regen-mechanic-select');
     const forceMechanic = select && select.value ? select.value : undefined;
-    LEVELS[currentLevelIdx] = generateProceduralLevel(forceMechanic);
+    LEVELS[currentLevelIdx] = generateProceduralLevel(currentLevelIdx, forceMechanic);
     hideSettings();
     loadLevel(currentLevelIdx);
 }
@@ -2101,6 +2282,9 @@ function saveLevelProgress() {
             foundColor1,
             foundColor2,
             usedReviveThisLevel,
+            // Level tĩnh KHÔNG cần lưu rows (luôn tải lại y hệt từ levels/*.json) —
+            // level TỰ SINH thì PHẢI lưu, vì bàn cờ chỉ sống trong RAM, xem loadLevel().
+            rows: currentLevelIdx >= STATIC_LEVEL_COUNT ? LEVELS[currentLevelIdx] : undefined,
             cells: grid.map(row => row.map(cell => ({
                 revealed: cell.revealed, flagged: cell.flagged, defused: !!cell.defused
             })))
@@ -2217,6 +2401,16 @@ const CAT_BUBBLE_IN_MS = 400; // phải khớp đúng thời lượng @keyframes
 
 function loadLevel(idx, tryResume) {
     ensureLevelGenerated(idx); // hết level tĩnh thì tự sinh thêm — che phủ MỌI lối vào (Màn Tiếp, cheat, resume...) chỉ bằng 1 chỗ gọi
+    // Level TỰ SINH (idx >= STATIC_LEVEL_COUNT) ra NGẪU NHIÊN mỗi lần ensureLevelGenerated()
+    // gọi generateProceduralLevel() — chỉ sống trong RAM, tải lại trang là mất. Nếu
+    // đang khôi phục ĐÚNG level dở dang đó, ép LEVELS[idx] về lại ĐÚNG bàn cờ đã lưu
+    // (saveLevelProgress() lưu kèm rows, xem bên dưới) thay vì dùng bản vừa random ở
+    // trên — nếu không, trạng thái ô đã mở/cắm cờ lưu trong localStorage sẽ áp nhầm
+    // lên 1 bàn cờ khác hẳn (bẫy nằm sai chỗ, dữ liệu hỏng).
+    if (tryResume && idx >= STATIC_LEVEL_COUNT) {
+        const savedForRows = readSavedLevelProgress();
+        if (savedForRows && savedForRows.levelIdx === idx && savedForRows.rows) LEVELS[idx] = savedForRows.rows;
+    }
     endGuidedTutorial();
     notifyGameplayStart(); // vào màn = bắt đầu "chơi thật" -> báo CrazyGames SDK
     levelGeneration++; // huỷ mọi hiệu ứng "nổ tung"/popup thắng dở dang từ ván trước
