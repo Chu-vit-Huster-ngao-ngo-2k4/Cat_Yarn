@@ -2066,16 +2066,40 @@ function ensureLevelGenerated(idx) {
     while (LEVELS.length <= idx) LEVELS.push(generateProceduralLevel(LEVELS.length));
 }
 
-// CHỈ DEV (xem DEV_LEVEL_TOOLS) — tải file JSON của 1 level TỰ SINH về máy,
-// đúng định dạng/tên file y hệt levels/levelNN.json, để dev tự tay copy vào thư
-// mục levels/ (rồi copy tiếp sang www/levels/ như quy trình thêm level bình
-// thường) nếu muốn giữ lại làm level cố định. Trình duyệt không cho JS ghi thẳng
-// vào ổ đĩa nên đây là cách khả thi duy nhất — không tự động hoá xa hơn được.
-function saveGeneratedLevelAsStatic(idx) {
+// CHỈ DEV (xem DEV_LEVEL_TOOLS) — lưu file JSON của 1 level TỰ SINH, đúng định
+// dạng/tên file y hệt levels/levelNN.json, để dev tự tay copy vào thư mục
+// levels/ (rồi copy tiếp sang www/levels/ như quy trình thêm level bình thường)
+// nếu muốn giữ lại làm level cố định.
+// Ưu tiên File System Access API (showSaveFilePicker) — cho phép chọn THẲNG
+// thư mục đích trong hộp thoại lưu file của hệ điều hành (kể cả levels/ của
+// project luôn, không bị ép về thư mục Downloads mặc định của trình duyệt như
+// cách tải file cũ) — chỉ Chrome/Edge hỗ trợ. Trình duyệt khác (Firefox/Safari)
+// không có API này thì rớt về cách cũ (tải qua thẻ <a download>, luôn về
+// Downloads, phải tự tay copy tiếp) — trả về true nếu lưu/tải thành công, false
+// nếu người dùng tự huỷ hộp thoại (KHÔNG coi là lỗi).
+async function saveGeneratedLevelAsStatic(idx) {
     const rows = LEVELS[idx];
-    if (!rows) return;
+    if (!rows) return false;
     const filename = `level${String(idx + 1).padStart(2, '0')}.json`;
-    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const content = JSON.stringify(rows, null, 2);
+
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{ description: 'JSON level file', accept: { 'application/json': ['.json'] } }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            return true;
+        } catch (e) {
+            if (e.name === 'AbortError') return false; // người dùng tự huỷ hộp thoại chọn nơi lưu
+            // lỗi khác (trình duyệt chặn quyền...) -> rơi xuống cách tải file cũ bên dưới
+        }
+    }
+
+    const blob = new Blob([content], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2084,6 +2108,7 @@ function saveGeneratedLevelAsStatic(idx) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    return true;
 }
 
 // CHỈ DEV — không ưng layout level tự sinh hiện tại (xấu/dễ quá/khó quá...) thì
@@ -3992,10 +4017,12 @@ function revealAndMove(r, c) {
                 // file — nhớ tắt (false) trước khi build bản phát hành thật.
                 if (DEV_LEVEL_TOOLS && currentLevelIdx >= STATIC_LEVEL_COUNT) {
                     actions.push({
-                        cls: 'btn-pink', label: '💾 [Dev] Lưu Thành Level Tĩnh', onClick: (btn) => {
-                            saveGeneratedLevelAsStatic(currentLevelIdx);
-                            btn.innerText = '✅ Đã tải file!';
-                            btn.disabled = true;
+                        cls: 'btn-pink', label: '💾 [Dev] Lưu Thành Level Tĩnh', onClick: async (btn) => {
+                            const saved = await saveGeneratedLevelAsStatic(currentLevelIdx);
+                            if (saved) {
+                                btn.innerText = '✅ Đã lưu file!';
+                                btn.disabled = true;
+                            }
                         }
                     });
                 }
